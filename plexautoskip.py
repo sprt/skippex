@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import configparser
+from functools import partial
 from pathlib import Path
 from time import sleep
 from typing import Any, Iterable, NamedTuple, Optional
@@ -21,7 +22,7 @@ def _print_stderr(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-class FileWritebackConfigParser(configparser.ConfigParser):
+class INIReadWriter(configparser.ConfigParser):
     def __init__(self, filename: Path, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._filename = filename
@@ -33,21 +34,25 @@ class FileWritebackConfigParser(configparser.ConfigParser):
 
     # TODO: prohibit other read_* methods
 
+    def close(self):
+        with open(self._filename, 'r+') as f:
+            self.write(f)
+
+
+class Database:
+    def __init__(self, ini_rw: INIReadWriter):
+        try:
+            ini_rw.add_section('database')
+        except configparser.DuplicateSectionError:
+            pass
+        self._ini_rw = ini_rw
+        self._db = ini_rw['database']
+
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        with open(self._filename, 'r+') as f:
-            super().write(f)
-
-
-class Database:
-    def __init__(self, cp: configparser.ConfigParser):
-        try:
-            cp.add_section('database')
-        except configparser.DuplicateSectionError:
-            pass
-        self._db = cp['database']
+        self._ini_rw.close()
 
     @property
     def app_id(self):
@@ -135,39 +140,39 @@ class PlexAuthClient:
         return auth_token
 
 
-def cmd_auth(args: argparse.Namespace):
-    with FileWritebackConfigParser(_PLEXAUTOSKIP_INI) as cp:
-        db = Database(cp)
-        app = PlexApplication(name=_APP_NAME, identifier=db.app_id)
-        plex_auth = PlexAuthClient(app)
-        pin_id, pin_code = plex_auth.generate_pin()
-        auth_url = plex_auth.generate_auth_url(pin_code)
+def cmd_auth(args: argparse.Namespace, db: Database):
+    app = PlexApplication(name=_APP_NAME, identifier=db.app_id)
+    plex_auth = PlexAuthClient(app)
+    pin_id, pin_code = plex_auth.generate_pin()
+    auth_url = plex_auth.generate_auth_url(pin_code)
 
-        webbrowser.open_new_tab(auth_url)
-        _print_stderr('Navigate to the following page to authorize the application:')
-        _print_stderr(auth_url)
-        _print_stderr()
+    webbrowser.open_new_tab(auth_url)
+    _print_stderr('Navigate to the following page to authorize this application:')
+    _print_stderr(auth_url)
+    _print_stderr()
 
-        _print_stderr('Waiting for successful authorization...')
-        auth_token = plex_auth.wait_for_token(pin_id, pin_code)
-        db.auth_token = auth_token
-        _print_stderr('Authorization successful')
+    _print_stderr('Waiting for successful authorization...')
+    auth_token = plex_auth.wait_for_token(pin_id, pin_code)
+
+    db.auth_token = auth_token
+    _print_stderr('Authorization successful')
 
 
-def cmd_default(args: argparse.Namespace):
+def cmd_default(args: argparse.Namespace, db: Database):
     raise NotImplementedError
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.set_defaults(func=cmd_default)
+    with Database(INIReadWriter(_PLEXAUTOSKIP_INI)) as db:
+        parser = argparse.ArgumentParser()
+        parser.set_defaults(func=partial(cmd_default, db=db))
 
-    subparsers = parser.add_subparsers(title='subcommands')
-    parser_auth = subparsers.add_parser('auth', help='authorize the application to access your Plex Account')
-    parser_auth.set_defaults(func=cmd_auth)
+        subparsers = parser.add_subparsers(title='subcommands')
+        parser_auth = subparsers.add_parser('auth', help='authorize the application to access your Plex Account')
+        parser_auth.set_defaults(func=partial(cmd_auth, db=db))
 
-    args = parser.parse_args()
-    sys.exit(args.func(args))
+        args = parser.parse_args()
+        sys.exit(args.func(args))
 
 
 if __name__ == '__main__':
