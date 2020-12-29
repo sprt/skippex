@@ -3,9 +3,10 @@ from __future__ import annotations
 import argparse
 import configparser
 from functools import partial
+from io import TextIOBase
 from pathlib import Path
 from time import sleep
-from typing import Any, Iterable, NamedTuple, Optional
+from typing import Any, Callable, Iterator, MutableMapping, NamedTuple, Optional
 from urllib.parse import urlencode
 import uuid
 import sys
@@ -22,49 +23,66 @@ def _print_stderr(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
-class INIReadWriter(configparser.ConfigParser):
-    def __init__(self, filename: Path, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._filename = filename
-        self._filename.touch(exist_ok=True)
-        super().read_file(open(self._filename, 'r+'))
+Store = MutableMapping[str, Any]
 
-    def read_file(self, f: Iterable[str], source: Optional[str]):
-        raise NotImplementedError
 
-    # TODO: prohibit other read_* methods
+class INIStore(Store):
+    # TODO: Use a file lock (portalocker)
 
-    def close(self):
-        with open(self._filename, 'r+') as f:
-            self.write(f)
+    def __init__(self, get_fp: Callable[[], TextIOBase], section: str):
+        self._get_fp = get_fp
+        self._section = section
+
+    def _read(self) -> configparser.ConfigParser:
+        cp = configparser.ConfigParser()
+        cp.read_file(self._get_fp())
+        try:
+            cp.add_section(self._section)
+        except configparser.DuplicateSectionError:
+            pass
+        return cp
+
+    def _write(self, cp: configparser.ConfigParser):
+        cp.write(self._get_fp())
+
+    def __getitem__(self, k: str) -> Any:
+        cp = self._read()
+        return cp[self._section][k]
+
+    def __setitem__(self, k: str, v: Any):
+        cp = self._read()
+        cp[self._section][k] = v
+        self._write(cp)
+
+    def __delitem__(self, k: str):
+        cp = self._read()
+        del cp[self._section][k]
+        self._write(cp)
+
+    def __iter__(self) -> Iterator:
+        cp = self._read()
+        return iter(cp[self._section])
+
+    def __len__(self) -> int:
+        cp = self._read()
+        return len(cp[self._section])
 
 
 class Database:
-    def __init__(self, ini_rw: INIReadWriter):
-        try:
-            ini_rw.add_section('database')
-        except configparser.DuplicateSectionError:
-            pass
-        self._ini_rw = ini_rw
-        self._db = ini_rw['database']
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._ini_rw.close()
+    def __init__(self, store: Store):
+        self._store = store
 
     @property
     def app_id(self):
-        return self._db.setdefault('app_id', str(uuid.uuid4()))
+        return self._store.setdefault('app_id', str(uuid.uuid4()))
 
     @property
     def auth_token(self) -> str:
-        return self._db['auth_token']
+        return self._store['auth_token']
 
     @auth_token.setter
     def auth_token(self, value: str):
-        self._db['auth_token'] = value
+        self._store['auth_token'] = value
 
 
 class PlexApplication(NamedTuple):
@@ -163,16 +181,20 @@ def cmd_default(args: argparse.Namespace, db: Database):
 
 
 def main():
-    with Database(INIReadWriter(_PLEXAUTOSKIP_INI)) as db:
-        parser = argparse.ArgumentParser()
-        parser.set_defaults(func=partial(cmd_default, db=db))
+    _PLEXAUTOSKIP_INI.touch()
+    f = lambda: open(_PLEXAUTOSKIP_INI, 'r+')
+    ini_store = INIStore(f, section='database')
+    db = Database(ini_store)
 
-        subparsers = parser.add_subparsers(title='subcommands')
-        parser_auth = subparsers.add_parser('auth', help='authorize the application to access your Plex Account')
-        parser_auth.set_defaults(func=partial(cmd_auth, db=db))
+    parser = argparse.ArgumentParser()
+    parser.set_defaults(func=partial(cmd_default, db=db))
 
-        args = parser.parse_args()
-        sys.exit(args.func(args))
+    subparsers = parser.add_subparsers(title='subcommands')
+    parser_auth = subparsers.add_parser('auth', help='authorize this application to access your Plex account')
+    parser_auth.set_defaults(func=partial(cmd_auth, db=db))
+
+    args = parser.parse_args()
+    sys.exit(args.func(args))
 
 
 if __name__ == '__main__':
