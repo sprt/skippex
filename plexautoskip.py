@@ -1,18 +1,24 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable, Iterator, MutableMapping
 import configparser
 from functools import partial
 from io import TextIOBase
+import json
 from pathlib import Path
 from time import sleep
-from typing import Any, Callable, Iterator, MutableMapping, NamedTuple, Optional
+from typing import Any, Literal, NamedTuple, Optional, TypedDict
 from urllib.parse import urlencode
 import uuid
 import sys
 import webbrowser
 
-from plexapi.myplex import PlexServer
+from plexapi.alert import AlertListener as PlexAlertListener
+from plexapi.client import PlexClient
+from plexapi.myplex import MyPlexAccount
+from plexapi.server import PlexServer
+from plexapi.video import Episode
 import requests
 
 _APP_NAME = 'Plex Auto-Skip'
@@ -148,7 +154,7 @@ class PlexAuthClient:
         r = self._make_request('GET', f'/pins/{pin_id}', headers=headers, data=data)
         r.raise_for_status()
         info = r.json()
-        return info['authToken']
+        return info['authToken'] if info['authToken'] else None
 
     def wait_for_token(self, pin_id: int, pin_code: int, check_interval_sec=1) -> str:
         auth_token = self.check_pin(pin_id, pin_code)
@@ -158,8 +164,7 @@ class PlexAuthClient:
         return auth_token
 
 
-def cmd_auth(args: argparse.Namespace, db: Database):
-    app = PlexApplication(name=_APP_NAME, identifier=db.app_id)
+def cmd_auth(args: argparse.Namespace, db: Database, app: PlexApplication):
     plex_auth = PlexAuthClient(app)
     pin_id, pin_code = plex_auth.generate_pin()
     auth_url = plex_auth.generate_auth_url(pin_code)
@@ -176,8 +181,132 @@ def cmd_auth(args: argparse.Namespace, db: Database):
     _print_stderr('Authorization successful')
 
 
-def cmd_default(args: argparse.Namespace, db: Database):
-    raise NotImplementedError
+class AlertListener(PlexAlertListener):
+    def _onMessage(self, *args):
+        # The upstream implementation silently logs exceptions when they happen,
+        # and never raises them. We don't want that.
+        message = args[-1]
+        data = json.loads(message)['NotificationContainer']
+        if self._callback:
+            self._callback(data)
+
+
+class PlaybackNotification(TypedDict):
+    sessionKey: str  # Not an int!
+    guid: str  # Can be the empty string
+    ratingKey: str
+    url: str  # Can be the empty string
+    key: str
+    viewOffset: int  # In milliseconds
+    playQueueItemID: int
+    state: Literal['buffering', 'playing', 'paused']
+
+
+class NoMatchingClientError(Exception):
+    """Raised when a session (episode being watched) has no matching client."""
+
+
+class NoMatchingSessionError(Exception):
+    """Raised when a notification has no matching session."""
+
+
+class AlertCallback:
+    def __init__(self, server: PlexServer, account: MyPlexAccount, db: Database):
+        self._server = server
+        self._account = account
+        self._db = db
+
+    def _match_session(self, notification: PlaybackNotification) -> Episode:
+        for session in self._server.sessions():
+            is_match = (
+                str(session.sessionKey) == notification['sessionKey']
+                and isinstance(session, Episode)
+                and session.hasIntroMarker
+            )
+            if is_match:
+                return session
+        raise NoMatchingSessionError
+
+    def _match_client(self, session: Episode) -> PlexClient:
+        # Search server.clients() using machineIdentifier. session.players()
+        # doesn't work because the PlexClients don't have a baseurl, thus
+        # can't make requests.
+
+        # XXX: Does the session ever not contain exactly 1 player?
+        sess_machine_id = session.players[0].machineIdentifier
+        # NOTE: Have to "advertize as player" in order to be seen by clients().
+        for client in self._server.clients():
+            if client.machineIdentifier == sess_machine_id:
+                return client
+        raise NoMatchingClientError
+
+    def _handle_notification(self, notification: PlaybackNotification):
+        if notification['state'] != 'playing':
+            return
+
+        try:
+            session = self._match_session(notification)
+        except NoMatchingSessionError:
+            # That's okay. Could simply be that the user is watching a movie,
+            # or that the episode has no intro markers.
+            return
+
+        client = self._match_client(session)
+        view_offset = notification['viewOffset']
+        intro_marker = next(m for m in session.markers if m.type == 'intro')
+
+        print(f'{notification["sessionKey"]=} {notification["viewOffset"]=} {notification["state"]=}')
+        print(f'{session=}')
+        print(f'{client=}')
+        print(f'{intro_marker=}')
+
+        if intro_marker.start <= view_offset and view_offset < intro_marker.end:
+            client.seekTo(intro_marker.end)
+            print(f'Seeked from {view_offset} to {intro_marker.end}')
+        else:
+            print('Did not seek')
+
+        print()
+
+    def __call__(self, alert: dict[str, Any]):
+        if alert['type'] == 'playing':
+            # Never seen a case where the alert doesn't contain exactly
+            # 1 notification, but let's loop over the list out of caution.
+            for notification in alert['PlaySessionStateNotification']:
+                self._handle_notification(notification)
+
+
+def cmd_default(args: argparse.Namespace, db: Database, app: PlexApplication) -> Optional[int]:
+    try:
+        auth_token = db.auth_token
+    except KeyError:
+        _print_stderr(
+            "No credentials found. Please first run the 'auth' command to "
+            "authorize the application."
+        )
+        return 1
+
+    auth_client = PlexAuthClient(app)
+    if not auth_client.is_token_valid(auth_token):
+        _print_stderr("Token invalid. Please run the 'auth' command to reauthenticate yourself.")
+        return 1
+
+    account = MyPlexAccount(token=auth_token)
+
+    try:
+        # TODO: Support multiple servers.
+        server_resource = next(r for r in account.resources() if 'server' in r.provides)
+    except StopIteration:
+        _print_stderr("Couldn't find a Plex server for this account.")
+        return 1
+
+    # TODO: Ensure we try HTTP only if HTTPS fails.
+    server = server_resource.connect()
+
+    alert_callback = AlertCallback(server, account, db)
+    alert_listener = AlertListener(server, alert_callback)
+    alert_listener.start()
+    alert_listener.join()
 
 
 def main():
@@ -185,13 +314,14 @@ def main():
     f = lambda: open(_PLEXAUTOSKIP_INI, 'r+')
     ini_store = INIStore(f, section='database')
     db = Database(ini_store)
+    app = PlexApplication(name=_APP_NAME, identifier=db.app_id)
 
     parser = argparse.ArgumentParser()
-    parser.set_defaults(func=partial(cmd_default, db=db))
+    parser.set_defaults(func=partial(cmd_default, db=db, app=app))
 
     subparsers = parser.add_subparsers(title='subcommands')
     parser_auth = subparsers.add_parser('auth', help='authorize this application to access your Plex account')
-    parser_auth.set_defaults(func=partial(cmd_auth, db=db))
+    parser_auth.set_defaults(func=partial(cmd_auth, db=db, app=app))
 
     args = parser.parse_args()
     sys.exit(args.func(args))
