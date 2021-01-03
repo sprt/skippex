@@ -294,7 +294,6 @@ def cmd_default(args: argparse.Namespace, db: Database, app: PlexApplication) ->
     account = MyPlexAccount(token=auth_token)
 
     try:
-        # TODO: Support multiple servers.
         server_resource = next(r for r in account.resources() if 'server' in r.provides)
     except StopIteration:
         _print_stderr("Couldn't find a Plex server for this account.")
