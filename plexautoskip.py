@@ -122,12 +122,14 @@ class PlexAuthClient:
         }
         r = self._make_request('GET', '/user', headers=headers, data=data)
 
-        if r.status_code == 200:
-            return True
-        elif r.status_code == 401:
-            return False
-        else:
+        try:
             r.raise_for_status()
+        except requests.HTTPError:
+            if r.status_code == 401:
+                return False
+            raise
+        else:
+            return True
 
     def generate_pin(self) -> tuple[int, str]:
         headers = {'Accept': 'application/json'}
@@ -160,7 +162,7 @@ class PlexAuthClient:
         info = r.json()
         return info['authToken'] if info['authToken'] else None
 
-    def wait_for_token(self, pin_id: int, pin_code: int, check_interval_sec=1) -> str:
+    def wait_for_token(self, pin_id: int, pin_code: str, check_interval_sec=1) -> str:
         auth_token = self.check_pin(pin_id, pin_code)
         while not auth_token:
             sleep(check_interval_sec)
