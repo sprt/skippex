@@ -6,6 +6,7 @@ import configparser
 from functools import partial
 from io import TextIOBase
 import json
+import logging
 from pathlib import Path
 from time import sleep
 from typing import Any, Literal, NamedTuple, Optional, TypedDict
@@ -20,6 +21,9 @@ from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
 from plexapi.video import Episode
 import requests
+
+
+logger = logging.getLogger('plexautoskip')
 
 _APP_NAME = 'Plex Auto-Skip'
 _PLEXAUTOSKIP_INI = Path('.plexautoskip.ini')
@@ -309,6 +313,13 @@ def cmd_default(args: argparse.Namespace, db: Database, app: PlexApplication) ->
 
 
 def main():
+    logging.basicConfig(
+        level=logging.NOTSET,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+    )
+    logger.setLevel(logging.DEBUG)
+
     _PLEXAUTOSKIP_INI.touch()
     f = lambda: open(_PLEXAUTOSKIP_INI, 'r+')
     ini_store = INIStore(f, section='database')
