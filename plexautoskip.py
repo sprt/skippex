@@ -400,7 +400,7 @@ class SessionNotFoundError(Exception):
         self.found_non_episode = found_non_episode
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class Session:
     key: str
     state: Literal['buffering', 'playing', 'paused', 'stopped']
@@ -424,7 +424,7 @@ class Session:
         return isinstance(other, self.__class__) and self.key == other.key
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, eq=False)
 class EpisodeSession(Session):
     playable: Episode
     view_offset_ms: int
