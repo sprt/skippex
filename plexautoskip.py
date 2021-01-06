@@ -4,12 +4,14 @@ from abc import ABC, abstractmethod
 import argparse
 from collections.abc import Callable, Iterator, MutableMapping
 import configparser
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from functools import partial
 from io import TextIOBase
 import json
 import logging
 from pathlib import Path
+import threading
 from time import sleep
 from typing import Any, Literal, NamedTuple, Optional, TypedDict, cast
 from urllib.parse import urlencode
@@ -24,6 +26,7 @@ from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
 from plexapi.video import Episode
 import requests
+from wrapt import synchronized
 
 
 logger = logging.getLogger('plexautoskip')
@@ -199,30 +202,30 @@ class AlertListener(PlexAlertListener):
         if self._callback:
             self._callback(data)
 
-
-class PlaybackNotification(TypedDict):
-    sessionKey: str  # Not an int!
-    guid: str  # Can be the empty string
-    ratingKey: str
-    url: str  # Can be the empty string
-    key: str
-    viewOffset: int  # In milliseconds
-    playQueueItemID: int
-    state: Literal['buffering', 'playing', 'paused']
+    def _onError(self, *args):
+        """ Called when websocket error is received.
+            In earlier releases, websocket-client returned a tuple of two parameters: a websocket.app.WebSocketApp
+            object and the error. Current releases appear to only return the error.
+            We are assuming the last argument in the tuple is the message.
+            This is to support compatibility with current and previous releases of websocket-client.
+        """
+        err = args[-1]
+        logger.error('AlertListener Error: %s' % err)
+        raise Exception(err)
 
 
 class SessionListener(ABC):
-    def filter_session(self, session: Playable) -> bool:
+    def accept_session(self, session: Session) -> bool:
         """See the docstrings for the callback methods."""
         return True
 
     @abstractmethod
-    def on_session_activity(self, session: Playable):
-        """Called iff filter_session(session) returns True."""
+    def on_session_activity(self, session: Session):
+        """Called iff accept_session(session) returns True."""
         pass
 
     @abstractmethod
-    def on_session_removal(self, session: Playable):
+    def on_session_removal(self, session: Session):
         """Called iff on_session_activity(session) was called at some point."""
         pass
 
@@ -241,13 +244,13 @@ class SeekablePlexClient(Seekable):
         self._client.seekTo(offset_ms)
 
 
-class NoSeekableFoundError(Exception):
+class SeekableNotFoundError(Exception):
     pass
 
 
 class SeekableProvider(ABC):
     @abstractmethod
-    def provide_seekable(self, session: Playable) -> Seekable:
+    def provide_seekable(self, session: Session) -> Seekable:
         """Raises NoSeekableFoundError if no Seekable could be found."""
         pass
 
@@ -256,79 +259,98 @@ class PlexSeekableProvider(SeekableProvider):
     def __init__(self, server: PlexServer):
         self._server = server
 
-    def provide_seekable(self, session: Playable) -> Seekable:
-        sess_machine_id = session.players[0].machineIdentifier
+    def provide_seekable(self, session: Session) -> Seekable:
+        sess_machine_id = session.player.machineIdentifier
         # NOTE: Have to "advertize as player" in order to be considered a client by Plex.
         client: PlexClient
         for client in self._server.clients():
             if client.machineIdentifier == sess_machine_id:
                 return SeekablePlexClient(client)
-        raise NoSeekableFoundError
+        raise SeekableNotFoundError
 
 
 class ChromecastSeekableProvider(SeekableProvider):
     pass
 
 
-class AutoSkipper(SessionListener):
+class SessionExtrapolator(ABC):
+    @abstractmethod
+    def trigger_extrapolation(self, session: Session, listener_accepted: bool) -> bool:
+        pass
+
+    @abstractmethod
+    def extrapolate(self, session: Session) -> tuple[Session, int]:
+        """
+        Returns the extrapolated session and the extrapolation delay in ms.
+        Called iff trigger_extrapolation(session) returns True.
+        """
+        pass
+
+
+class AutoSkipper(SessionListener, SessionExtrapolator):
     def __init__(self, seekable_provider: SeekableProvider):
-        super().__init__()
-        self._skipped: set[SessionKey] = set()
+        self._skipped: set[Session] = set()
         self._sp = seekable_provider
 
-    def filter_session(self, session: Playable) -> bool:
-        if not isinstance(session, Episode):
+    def trigger_extrapolation(self, session: Session, listener_accepted: bool) -> bool:
+        # Note it's only useful to do this when the state is 'playing':
+        #  - When it's 'paused', we'll receive another notification either as
+        #    soon as the state changes, or every 10 second while it's paused.
+        #  - When it's 'buffering', we'll also receive another notification as
+        #    soon as the state changes. And I assume we'd also get notified
+        #    every 10 second otherwise.
+        #  - When it's 'stopped', we've already sent a signal to the dispatcher.
+        return listener_accepted
+
+    def extrapolate(self, session: Session) -> tuple[Session, int]:
+        session = cast(EpisodeSession, session)  # Safe thanks to trigger_extrapolation().
+        delay_ms = 1000
+        new_view_offset_ms = session.view_offset_ms + delay_ms
+        return replace(session, view_offset_ms=new_view_offset_ms), delay_ms
+
+    def accept_session(self, session: Session) -> bool:
+        if not isinstance(session, EpisodeSession):
             # Only TV shows have intro markers, other media don't interest us.
             logger.debug('Ignored; not an episode')
             return False
 
-        # XXX: From my testing, a session always has exactly one player.
-        player: PlexClient = session.players[0]
-        player_state: Literal['buffering', 'paused', 'playing'] = player.state
-
-        if player_state != 'playing':
-            logger.debug(f'Ignored; state is "{player_state}" instead of "playing"')
+        if session in self._skipped:
+            logger.debug('Ignored; already skipped during this session')
             return False
 
-        # Preserve the view offset.
-        # See https://github.com/pkkid/python-plexapi/issues/638.
-        # Potential alernative: https://stackoverflow.com/a/1445289/407054.
-        try:
-            view_offset = session.viewOffset
-            if not session.hasIntroMarker:
-                logger.debug(f'Ignored; has no intro marker')
-                return False
-        finally:
-            session.viewOffset = view_offset
+        if session.state != 'playing':
+            logger.debug(f'Ignored; state is "{session.state}" instead of "playing"')
+            return False
+
+        if not session.playable.hasIntroMarker:
+            logger.debug(f'Ignored; has no intro marker')
+            return False
 
         return True
 
-    def on_session_activity(self, session: Playable):
-        session_key = str(session.sessionKey)
-        if session_key in self._skipped:
-            logger.debug('Ignored; already skipped during this session')
-            return
+    def on_session_activity(self, session: Session):
+        session = cast(EpisodeSession, session)  # Safe thanks to accept_session().
+        logging.debug(f'session_activity: {session}')
 
-        session = cast(Episode, session)  # Safe thanks to self.filter_session().
-        view_offset = session.viewOffset
-        intro_marker = next(m for m in session.markers if m.type == 'intro')
+        intro_marker = next(m for m in session.playable.markers if m.type == 'intro')
+        view_offset_ms = session.view_offset_ms
 
-        logger.debug(f'{session.sessionKey=}')
-        logger.debug(f'{view_offset=}')
+        logger.debug(f'{session.key=}')
+        logger.debug(f'{session.view_offset_ms=}')
         logger.debug(f'{intro_marker=}')
 
-        if intro_marker.start <= view_offset and view_offset < intro_marker.end:
+        if intro_marker.start <= view_offset_ms and view_offset_ms < intro_marker.end:
             seekable = self._sp.provide_seekable(session)
             seekable.seek(intro_marker.end)
-            self._skipped.add(session_key)
-            logger.debug(f'Skipped; seeked from {view_offset} to {intro_marker.end}')
+            self._skipped.add(session)
+            logger.debug(f'Skipped; seeked from {view_offset_ms} to {intro_marker.end}')
         else:
             logger.debug('Did not skip; not viewing intro')
 
         logger.debug('-----')
 
-    def on_session_removal(self, session: Playable):
-        self._skipped.discard(str(session.sessionKey))
+    def on_session_removal(self, session: Session):
+        self._skipped.discard(session)
 
 
 class SessionDispatcher:
@@ -337,37 +359,237 @@ class SessionDispatcher:
         # conservatively set the default removal_timeout_sec to 20 seconds.
         self._listener = listener
         self._removal_timeout_sec = removal_timeout_sec
-        self._last_active: dict[str, tuple[datetime, Playable]] = {}
+        self._last_active: dict[Session, datetime] = {}
 
-    def dispatch(self, session: Playable):
-        if self._listener.filter_session(session):
+    def dispatch(self, session: Session) -> bool:
+        """
+        Dispatches the session if listener.accept_session(session) is True.
+        Returns the result of that call.
+        """
+        accepted = False
+        if self._listener.accept_session(session):
+            accepted = True
             self._listener.on_session_activity(session)
-            key = str(session.sessionKey)
-            self._last_active[key] = (datetime.now(), session)
+            self._last_active[session] = datetime.now()
 
-        # Remove inactive sessions.
+        # Remove sessions that we haven't seen in the last removal_timeout_sec
+        # period, in case dispatch_removal() wasn't called for some reason.
         timeout_ago = datetime.now() - timedelta(seconds=self._removal_timeout_sec)
-        inactive = (
-            (key, session) for key, (last_active, session) in self._last_active.items()
-            if last_active <= timeout_ago
-        )
-        for inactive_key, inactive_session in inactive:
+        inactive_sessions = [
+            session for (session, last_active) in self._last_active.items()
+            if last_active < timeout_ago
+        ]
+        for inactive_session in inactive_sessions:
             self._listener.on_session_removal(inactive_session)
-            self._last_active.pop(inactive_key, None)
+            del self._last_active[inactive_session]
+
+        return accepted
+
+    def dispatch_removal(self, removed_key: SessionKey) -> bool:
+        for session in self._last_active.keys():
+            if session.key == removed_key:
+                self._listener.on_session_removal(session)
+                del self._last_active[session]
+                return True
+        return False
+
+
+class SessionNotFoundError(Exception):
+    def __init__(self, *args: object, found_non_episode: bool = False) -> None:
+        super().__init__(*args)
+        self.found_non_episode = found_non_episode
+
+
+@dataclass(frozen=True)
+class Session:
+    key: str
+    state: Literal['buffering', 'playing', 'paused', 'stopped']
+    playable: Playable
+    player: PlexClient
+
+    @classmethod
+    def from_playable(cls, playable: Playable) -> Session:
+        player = playable.players[0]
+        return cls(
+            key=str(playable.sessionKey),
+            state=player.state,
+            playable=playable,
+            player=player,
+        )
+
+    def __hash__(self):
+        return hash(self.key)
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, self.__class__) and self.key == other.key
+
+
+@dataclass(frozen=True)
+class EpisodeSession(Session):
+    playable: Episode
+    view_offset_ms: int
+
+    @classmethod
+    def from_playable(cls, episode: Episode) -> EpisodeSession:
+        assert not episode.isFullObject()  # Probably dangerous wrt viewOffset otherwise.
+        player = episode.players[0]
+
+        return cls(
+            key=str(episode.sessionKey),
+            state=player.state,
+            playable=episode,
+            player=player,
+            view_offset_ms=int(episode.viewOffset),
+        )
+
+
+class SessionFactory:
+    @classmethod
+    def make(cls, playable: Playable) -> Session:
+        if isinstance(playable, Episode):
+            return EpisodeSession.from_playable(playable)
+        return Session.from_playable(playable)
+
+
+class SessionProvider:
+    def __init__(self, server: PlexServer):
+        self._server = server
+
+    def provide(self, session_key: str) -> Session:
+        playable: Playable
+        for playable in self._server.sessions():
+            if str(playable.sessionKey) == session_key:
+                if isinstance(playable, Episode):
+                    return SessionFactory.make(playable)
+                raise SessionNotFoundError(found_non_episode=True)
+        raise SessionNotFoundError
+
+
+class PlaybackNotification(TypedDict):
+    sessionKey: str  # Not an int!
+    guid: str  # Can be the empty string.
+    ratingKey: str
+    url: str  # Can be the empty string.
+    key: str
+    viewOffset: int  # In milliseconds.
+    playQueueItemID: int
+    state: Literal['buffering', 'playing', 'paused', 'stopped']
 
 
 class SessionDiscovery:
-    def __init__(self, server: PlexServer, dispatcher: SessionDispatcher, poll_interval_sec: int = 1):
+    def __init__(
+        self,
+        server: PlexServer,
+        provider: SessionProvider,
+        dispatcher: SessionDispatcher,
+        extrapolator: SessionExtrapolator,
+    ):
+        self.logger = logger.getChild(self.__class__.__name__)
         self._server = server
+        self._provider = provider
         self._dispatcher = dispatcher
-        self._poll_interval_sec = poll_interval_sec
+        self._extrapolator = extrapolator
 
-    def run(self):
-        while True:
-            session: Playable
-            for session in self._server.sessions():
-                self._dispatcher.dispatch(session)
-            sleep(self._poll_interval_sec)
+        # To avoid leaks, preserve the following invariant:
+        # timer in dict <=> timer alive,
+        # where alive = started and not (done executing or cancelled).
+        self._timers: dict[SessionKey, threading.Timer] = {}
+
+    @synchronized
+    def alert_callback(self, alert: dict[str, Any]):
+        if alert['type'] == 'playing':
+            # Never seen a case where the alert doesn't contain exactly one
+            # notification, but let's loop over the list out of caution.
+            for notification in alert['PlaySessionStateNotification']:
+                self._handle_notification(notification)
+
+    @synchronized
+    def _dispatch_extrapolated(self, new_session: Session):
+        self._dispatcher.dispatch(new_session)
+        del self._timers[new_session.key]  # Preserve the timers invariant.
+        logging.debug(f'Dispatched extrapolated session {new_session}')
+        self._create_timer(new_session)  # Repeat the process.
+
+    @synchronized
+    def _create_timer(self, old_session: Session):
+        assert old_session not in self._timers
+        new_session, delay_ms = self._extrapolator.extrapolate(old_session)
+        delay_sec = delay_ms / 1000
+        new_timer = threading.Timer(
+            delay_sec,
+            self._dispatch_extrapolated,
+            args=(new_session,),
+        )
+        new_timer.start()
+        self._timers[new_session.key] = new_timer
+        logging.debug(
+            f'Timer (delay={delay_sec:.3f}s) started for extrapolated session '
+            f'{new_session} (original: {old_session})'
+        )
+
+    @synchronized
+    def _handle_notification(self, notification: PlaybackNotification):
+        # Dispatch regular notifications and simulate the rest while extrapoling
+        # viewOffset using a timer. When a regular notification comes in, we
+        # stop the active timer and handle the notification, then the process
+        # repeats.
+
+        # Ensure this is a string because I don't trust the Plex API.
+        session_key = str(notification['sessionKey'])
+        logging.debug(
+            f'Incoming notification for session key {session_key} '
+            f'(state = {notification["state"]})'
+        )
+
+        if notification['state'] != 'stopped':
+            try:
+                session = self._provider.provide(session_key)
+            except SessionNotFoundError:
+                if notification['state'] == 'paused':
+                    # Plex is a little weird and sometimes sends a session
+                    # on the WebSocket even though the HTTP API doesn't
+                    # return it. I've seen this happen after opening the
+                    # Plex web app and noticing that the mini-player at the
+                    # bottom of the page showed a paused episode. It's
+                    # probably getting reloaded from memory and sent as a
+                    # notification, but then they forget to update the API's
+                    # state. Anyway this is an icky situation and we'll get
+                    # notified if playback starts anyway, so just return
+                    # here.
+                    logging.debug(f"No session found for 'paused' notification")
+                    return
+                raise
+        else:
+            session = None
+
+        # Incoming regular notification, stop the active timer if any. And even
+        # though we might recreate one on the spot, let's also remove the dict
+        # entry to prevent any leak.
+        old_timer = self._timers.pop(session_key, None)
+        if old_timer:
+            old_timer.cancel()
+            logging.debug(f'Cancelled timer for session key {session_key}')
+        else:
+            logging.debug(f'No old timer for session key {session_key}')
+
+        # Dispatch the incoming notification immediately.
+
+        if not session:
+            # Session was stopped.
+            self._dispatcher.dispatch_removal(session_key)
+            return
+
+        accepted = self._dispatcher.dispatch(session)
+
+        # Then, simulate incoming notifications by dispatching mutated
+        # sessions (where viewOffset is updated by extrapolation) at
+        # intervals. We do this until another regular notification comes in,
+        # then the cycle begins again.
+        if self._extrapolator.trigger_extrapolation(session, accepted):
+            logging.debug(f'Will extrapolate session {session}')
+            self._create_timer(session)
+        else:
+            logging.debug(f'Will not extrapolate session {session}')
 
 
 def cmd_default(args: argparse.Namespace, db: Database, app: PlexApplication) -> Optional[int]:
@@ -392,21 +614,31 @@ def cmd_default(args: argparse.Namespace, db: Database, app: PlexApplication) ->
     except StopIteration:
         _print_stderr("Couldn't find a Plex server for this account.")
         return 1
+    else:
+        # TODO: Ensure we try HTTP only if HTTPS fails.
+        server = server_resource.connect()
 
-    server = server_resource.connect()  # TODO: Ensure we try HTTP only if HTTPS fails.
-    sp = PlexSeekableProvider(server)
-    listener = AutoSkipper(seekable_provider=sp)
-    dispatcher = SessionDispatcher(listener)
+    session_provider = SessionProvider(server)
+    seekable_provider = PlexSeekableProvider(server)
+    auto_skipper = AutoSkipper(seekable_provider)
+    dispatcher = SessionDispatcher(listener=auto_skipper)
 
-    discovery = SessionDiscovery(server, dispatcher)
-    discovery.run()
+    discovery = SessionDiscovery(
+        server=server,
+        provider=session_provider,
+        dispatcher=dispatcher,
+        extrapolator=auto_skipper,
+    )
+
+    alert_listener = AlertListener(server, discovery.alert_callback)
+    alert_listener.start()
+    alert_listener.join()
 
 
 def main():
     logging.basicConfig(
         level=logging.NOTSET,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S',
+        format='%(asctime)s - %(threadName)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s',
     )
     logger.setLevel(logging.DEBUG)
 
