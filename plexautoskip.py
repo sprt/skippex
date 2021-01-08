@@ -19,6 +19,7 @@ import uuid
 import sys
 import webbrowser
 
+import plexapi
 from plexapi.alert import AlertListener as PlexAlertListener
 from plexapi.base import Playable
 from plexapi.client import PlexClient
@@ -207,7 +208,7 @@ class AlertListener(PlexAlertListener):
     def _onError(self, *args):
         # The upstream implementation doesn't raise.
         err = args[-1]
-        logger.error('AlertListener Error: %s' % err)
+        plexapi.log.error('AlertListener Error: %s' % err)
         raise RuntimeError(err)
 
 
