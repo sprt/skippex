@@ -169,7 +169,7 @@ class PlexAuthClient:
         info = r.json()
         return info['authToken'] if info['authToken'] else None
 
-    def wait_for_token(self, pin_id: int, pin_code: str, check_interval_sec=1) -> str:
+    def wait_for_token(self, pin_id: int, pin_code: str, check_interval_sec: int = 1) -> str:
         auth_token = self.check_pin(pin_id, pin_code)
         while not auth_token:
             sleep(check_interval_sec)
@@ -337,7 +337,7 @@ class AutoSkipper(SessionListener, SessionExtrapolator):
 
     def on_session_activity(self, session: Session):
         session = cast(EpisodeSession, session)  # Safe thanks to accept_session().
-        logging.debug(f'session_activity: {session}')
+        logger.debug(f'session_activity: {session}')
 
         intro_marker = next(m for m in session.playable.markers if m.type == 'intro')
         view_offset_ms = session.view_offset_ms
@@ -492,7 +492,6 @@ class SessionDiscovery:
         dispatcher: SessionDispatcher,
         extrapolator: SessionExtrapolator,
     ):
-        self.logger = logger.getChild(self.__class__.__name__)
         self._server = server
         self._provider = provider
         self._dispatcher = dispatcher
@@ -523,7 +522,7 @@ class SessionDiscovery:
         self._timers.pop(session.key, None)
 
         if not self._extrapolator.trigger_extrapolation(session, accepted):
-            logging.debug(f'Will not extrapolate session {session}')
+            logger.debug(f'Will not extrapolate session {session}')
             return
 
         assert session.key not in self._timers
@@ -537,7 +536,7 @@ class SessionDiscovery:
         new_timer.start()
         self._timers[new_session.key] = new_timer
 
-        logging.debug(
+        logger.debug(
             f'Timer (delay={delay_sec:.3f}s) started for extrapolated session '
             f'{new_session} (original: {session})'
         )
@@ -551,7 +550,7 @@ class SessionDiscovery:
 
         # Ensure this is a string because I don't trust the Plex API.
         session_key = str(notification['sessionKey'])
-        logging.debug(
+        logger.debug(
             f'Incoming notification for session key {session_key} '
             f'(state = {notification["state"]})'
         )
@@ -562,9 +561,9 @@ class SessionDiscovery:
         old_timer = self._timers.pop(session_key, None)
         if old_timer:
             old_timer.cancel()
-            logging.debug(f'Cancelled timer for session key {session_key}')
+            logger.debug(f'Cancelled timer for session key {session_key}')
         else:
-            logging.debug(f'No existing timer for session key {session_key}')
+            logger.debug(f'No existing timer for session key {session_key}')
 
         if notification['state'] == 'stopped':
             # The HTTP API won't contain the session anymore, so just dispatch
@@ -586,7 +585,7 @@ class SessionDiscovery:
                 # state. Anyway this is an icky situation and we'll get
                 # notified if playback starts anyway, so just return
                 # here.
-                logging.debug(f"No session found for 'paused' notification")
+                logger.debug(f"No session found for 'paused' notification")
                 return
             raise
 
