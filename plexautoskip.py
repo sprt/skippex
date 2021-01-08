@@ -194,6 +194,8 @@ def cmd_auth(args: argparse.Namespace, db: Database, app: PlexApplication):
 
 
 class AlertListener(PlexAlertListener):
+    # TODO: Reraise exceptions back to the main thread.
+
     def _onMessage(self, *args):
         # The upstream implementation silently logs exceptions when they happen,
         # and never raises them. We don't want that.
@@ -203,15 +205,10 @@ class AlertListener(PlexAlertListener):
             self._callback(data)
 
     def _onError(self, *args):
-        """ Called when websocket error is received.
-            In earlier releases, websocket-client returned a tuple of two parameters: a websocket.app.WebSocketApp
-            object and the error. Current releases appear to only return the error.
-            We are assuming the last argument in the tuple is the message.
-            This is to support compatibility with current and previous releases of websocket-client.
-        """
+        # The upstream implementation doesn't raise.
         err = args[-1]
         logger.error('AlertListener Error: %s' % err)
-        raise Exception(err)
+        raise RuntimeError(err)
 
 
 class SessionListener(ABC):
@@ -537,6 +534,7 @@ class SessionDiscovery:
         )
         new_timer.start()
         self._timers[new_session.key] = new_timer
+
         logging.debug(
             f'Timer (delay={delay_sec:.3f}s) started for extrapolated session '
             f'{new_session} (original: {session})'
@@ -556,27 +554,6 @@ class SessionDiscovery:
             f'(state = {notification["state"]})'
         )
 
-        if notification['state'] == 'stopped':
-            session = None
-        else:
-            try:
-                session = self._provider.provide(session_key)
-            except SessionNotFoundError:
-                if notification['state'] == 'paused':
-                    # Plex is a little weird and sometimes sends a session
-                    # on the WebSocket even though the HTTP API doesn't
-                    # return it. I've seen this happen after opening the
-                    # Plex web app and noticing that the mini-player at the
-                    # bottom of the page showed a paused episode. It's
-                    # probably getting reloaded from memory and sent as a
-                    # notification, but then they forget to update the API's
-                    # state. Anyway this is an icky situation and we'll get
-                    # notified if playback starts anyway, so just return
-                    # here.
-                    logging.debug(f"No session found for 'paused' notification")
-                    return
-                raise
-
         # Incoming regular notification, stop the active timer if any. And even
         # though we might recreate one on the spot, let's also remove the dict
         # entry to prevent any leak.
@@ -587,12 +564,31 @@ class SessionDiscovery:
         else:
             logging.debug(f'No existing timer for session key {session_key}')
 
-        # Dispatch the incoming notification immediately.
-        if session:
-            self._dispatch_and_schedule_extrapolated(session)
-        else:
-            # Session was stopped.
+        if notification['state'] == 'stopped':
+            # The HTTP API won't contain the session anymore, so just dispatch
+            # the removal and return.
             self._dispatcher.dispatch_removal(session_key)
+            return
+
+        try:
+            session = self._provider.provide(session_key)
+        except SessionNotFoundError:
+            if notification['state'] == 'paused':
+                # Plex is a little weird and sometimes sends a session
+                # on the WebSocket even though the HTTP API doesn't
+                # return it. I've seen this happen after opening the
+                # Plex web app and noticing that the mini-player at the
+                # bottom of the page showed a paused episode. It's
+                # probably getting reloaded from memory and sent as a
+                # notification, but then they forget to update the API's
+                # state. Anyway this is an icky situation and we'll get
+                # notified if playback starts anyway, so just return
+                # here.
+                logging.debug(f"No session found for 'paused' notification")
+                return
+            raise
+
+        self._dispatch_and_schedule_extrapolated(session)
 
 
 def cmd_default(args: argparse.Namespace, db: Database, app: PlexApplication) -> Optional[int]:
