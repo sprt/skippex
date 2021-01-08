@@ -366,6 +366,8 @@ class SessionDispatcher:
         # conservatively set the default removal_timeout_sec to 20 seconds.
         self._listener = listener
         self._removal_timeout_sec = removal_timeout_sec
+        # Sessions to track and potentially remove after a period of
+        # removal_timeout_sec with no dispatching attempt.
         self._last_active: dict[Session, datetime] = {}
 
     def dispatch(self, session: Session) -> bool:
@@ -377,7 +379,9 @@ class SessionDispatcher:
         if self._listener.accept_session(session):
             accepted = True
             self._listener.on_session_activity(session)
-            self._last_active[session] = datetime.now()
+
+        now = datetime.now()
+        self._last_active[session] = now
 
         # Remove sessions that we haven't seen in the last removal_timeout_sec
         # period, in case dispatch_removal() wasn't called for some reason.
