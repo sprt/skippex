@@ -385,22 +385,19 @@ class SessionDispatcher:
 
         # Remove sessions that we haven't seen in the last removal_timeout_sec
         # period, in case dispatch_removal() wasn't called for some reason.
-        timeout_ago = datetime.now() - timedelta(seconds=self._removal_timeout_sec)
-        inactive_sessions = [
-            session for (session, last_active) in self._last_active.items()
-            if last_active < timeout_ago
-        ]
-        for inactive_session in inactive_sessions:
-            self._listener.on_session_removal(inactive_session)
-            del self._last_active[inactive_session]
+        timeout_ago = now - timedelta(seconds=self._removal_timeout_sec)
+        for s, last_active in list(self._last_active.items()):
+            if last_active < timeout_ago:
+                self._listener.on_session_removal(s)
+                del self._last_active[s]
 
         return accepted
 
     def dispatch_removal(self, removed_key: SessionKey) -> bool:
-        for session in self._last_active.keys():
-            if session.key == removed_key:
-                self._listener.on_session_removal(session)
-                del self._last_active[session]
+        for s in list(self._last_active.keys()):
+            if s.key == removed_key:
+                self._listener.on_session_removal(s)
+                del self._last_active[s]
                 return True
         return False
 
