@@ -300,7 +300,13 @@ class AutoSkipper(SessionListener, SessionExtrapolator):
         #    soon as the state changes. And I assume we'd also get notified
         #    every 10 second otherwise.
         #  - When it's 'stopped', we've already sent a signal to the dispatcher.
-        return listener_accepted
+
+        if not listener_accepted:
+            return False
+
+        # The listener accepted the session, and it may have skipped the intro.
+        # In that case, we don't wanna extrapolate the session.
+        return session not in self._skipped
 
     def extrapolate(self, session: Session) -> tuple[Session, int]:
         session = cast(EpisodeSession, session)  # Safe thanks to trigger_extrapolation().
@@ -309,6 +315,9 @@ class AutoSkipper(SessionListener, SessionExtrapolator):
         return replace(session, view_offset_ms=new_view_offset_ms), delay_ms
 
     def accept_session(self, session: Session) -> bool:
+        # TODO: Should we skip if the user resumes an episode (even with a new
+        # session) during the intro?
+
         if not isinstance(session, EpisodeSession):
             # Only TV shows have intro markers, other media don't interest us.
             logger.debug('Ignored; not an episode')
@@ -504,27 +513,33 @@ class SessionDiscovery:
                 self._handle_notification(notification)
 
     @synchronized
-    def _dispatch_extrapolated(self, new_session: Session):
-        self._dispatcher.dispatch(new_session)
-        del self._timers[new_session.key]  # Preserve the timers invariant.
-        logging.debug(f'Dispatched extrapolated session {new_session}')
-        self._create_timer(new_session)  # Repeat the process.
+    def _dispatch_and_schedule_extrapolated(self, session: Session):
+        """Dispatches the specified session and potentially extrapolates it."""
+        accepted = self._dispatcher.dispatch(session)
 
-    @synchronized
-    def _create_timer(self, old_session: Session):
-        assert old_session not in self._timers
-        new_session, delay_ms = self._extrapolator.extrapolate(old_session)
+        # Preserve the timers invariant: this thread will die if this session
+        # doesn't trigger an extrapolation. Note there won't be a dict entry
+        # if this function wasn't called as part of a timer, so popping nothing
+        # is fine.
+        self._timers.pop(session.key, None)
+
+        if not self._extrapolator.trigger_extrapolation(session, accepted):
+            logging.debug(f'Will not extrapolate session {session}')
+            return
+
+        assert session.key not in self._timers
+        new_session, delay_ms = self._extrapolator.extrapolate(session)
         delay_sec = delay_ms / 1000
         new_timer = threading.Timer(
             delay_sec,
-            self._dispatch_extrapolated,
+            self._dispatch_and_schedule_extrapolated,
             args=(new_session,),
         )
         new_timer.start()
         self._timers[new_session.key] = new_timer
         logging.debug(
             f'Timer (delay={delay_sec:.3f}s) started for extrapolated session '
-            f'{new_session} (original: {old_session})'
+            f'{new_session} (original: {session})'
         )
 
     @synchronized
@@ -541,7 +556,9 @@ class SessionDiscovery:
             f'(state = {notification["state"]})'
         )
 
-        if notification['state'] != 'stopped':
+        if notification['state'] == 'stopped':
+            session = None
+        else:
             try:
                 session = self._provider.provide(session_key)
             except SessionNotFoundError:
@@ -559,8 +576,6 @@ class SessionDiscovery:
                     logging.debug(f"No session found for 'paused' notification")
                     return
                 raise
-        else:
-            session = None
 
         # Incoming regular notification, stop the active timer if any. And even
         # though we might recreate one on the spot, let's also remove the dict
@@ -570,26 +585,14 @@ class SessionDiscovery:
             old_timer.cancel()
             logging.debug(f'Cancelled timer for session key {session_key}')
         else:
-            logging.debug(f'No old timer for session key {session_key}')
+            logging.debug(f'No existing timer for session key {session_key}')
 
         # Dispatch the incoming notification immediately.
-
-        if not session:
+        if session:
+            self._dispatch_and_schedule_extrapolated(session)
+        else:
             # Session was stopped.
             self._dispatcher.dispatch_removal(session_key)
-            return
-
-        accepted = self._dispatcher.dispatch(session)
-
-        # Then, simulate incoming notifications by dispatching mutated
-        # sessions (where viewOffset is updated by extrapolation) at
-        # intervals. We do this until another regular notification comes in,
-        # then the cycle begins again.
-        if self._extrapolator.trigger_extrapolation(session, accepted):
-            logging.debug(f'Will extrapolate session {session}')
-            self._create_timer(session)
-        else:
-            logging.debug(f'Will not extrapolate session {session}')
 
 
 def cmd_default(args: argparse.Namespace, db: Database, app: PlexApplication) -> Optional[int]:
