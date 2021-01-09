@@ -730,6 +730,13 @@ def main():
     )
     logger.setLevel(logging.DEBUG)
 
+    # Disable sub-warning logging for third-party packages.
+    for tp_name, tp_logger in logging.root.manager.loggerDict.items():  # type: ignore
+        if isinstance(tp_logger, logging.PlaceHolder):
+            continue
+        if not tp_name.startswith(logger.name):
+            tp_logger.setLevel(logging.WARNING)
+
     _PLEXAUTOSKIP_INI.touch()
     f = lambda: open(_PLEXAUTOSKIP_INI, 'r+')
     ini_store = INIStore(f, section='database')
