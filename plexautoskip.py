@@ -403,9 +403,7 @@ class SessionDispatcher:
 
 
 class SessionNotFoundError(Exception):
-    def __init__(self, *args: object, found_non_episode: bool = False) -> None:
-        super().__init__(*args)
-        self.found_non_episode = found_non_episode
+    pass
 
 
 @dataclass(frozen=True, eq=False)
@@ -467,9 +465,7 @@ class SessionProvider:
         playable: Playable
         for playable in self._server.sessions():
             if str(playable.sessionKey) == session_key:
-                if isinstance(playable, Episode):
-                    return SessionFactory.make(playable)
-                raise SessionNotFoundError(found_non_episode=True)
+                return SessionFactory.make(playable)
         raise SessionNotFoundError
 
 
