@@ -15,7 +15,7 @@ import threading
 from time import sleep
 from typing import Any, Literal, NamedTuple, Optional, TypedDict, cast
 from urllib.parse import urlencode
-import uuid
+from uuid import UUID, uuid4
 import sys
 import webbrowser
 
@@ -26,8 +26,11 @@ from plexapi.client import PlexClient
 from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
 from plexapi.video import Episode
+import pychromecast
+from pychromecast.controllers.plex import PlexController
 import requests
 from wrapt import synchronized
+import zeroconf
 
 
 logger = logging.getLogger('plexautoskip')
@@ -91,7 +94,7 @@ class Database:
 
     @property
     def app_id(self):
-        return self._store.setdefault('app_id', str(uuid.uuid4()))
+        return self._store.setdefault('app_id', str(uuid4()))
 
     @property
     def auth_token(self) -> str:
@@ -239,7 +242,19 @@ class SeekablePlexClient(Seekable):
         self._client = client
 
     def seek(self, offset_ms: int):
+        # XXX: When tested against an iPhone client (iOS 14.3, Plex 7.11, Plex
+        # Server 1.21.1.3830), this takes a very long time to return (over 15
+        # seconds), even though the client successfully seeks in less than a
+        # second. Should probably run this in a new thread.
         self._client.seekTo(offset_ms)
+
+
+class SeekableChromecastAdapter(Seekable):
+    def __init__(self, plex_ctrl: PlexController):
+        self._plex_ctrl = plex_ctrl
+
+    def seek(self, offset_ms: int):
+        self._plex_ctrl.seek(offset_ms / 1000)
 
 
 class SeekableNotFoundError(Exception):
@@ -249,8 +264,21 @@ class SeekableNotFoundError(Exception):
 class SeekableProvider(ABC):
     @abstractmethod
     def provide_seekable(self, session: Session) -> Seekable:
-        """Raises NoSeekableFoundError if no Seekable could be found."""
+        """Raises SeekableNotFoundError if no Seekable could be found."""
         pass
+
+
+class SeekableProviderChain(SeekableProvider):
+    def __init__(self, providers: list[SeekableProvider]):
+        self._providers = providers
+
+    def provide_seekable(self, session: Session) -> Seekable:
+        for provider in self._providers[:-1]:
+            try:
+                return provider.provide_seekable(session)
+            except SeekableNotFoundError:
+                pass
+        return self._providers[-1].provide_seekable(session)
 
 
 class PlexSeekableProvider(SeekableProvider):
@@ -267,8 +295,57 @@ class PlexSeekableProvider(SeekableProvider):
         raise SeekableNotFoundError
 
 
-class ChromecastSeekableProvider(SeekableProvider):
+class ChromecastNotFoundError(Exception):
     pass
+
+
+class ChromecastMonitor:
+    # The callbacks are called from a thread different from the main thread.
+
+    def __init__(self, listener: pychromecast.CastListener, zconf: zeroconf.Zeroconf):
+        self._listener = listener
+        self._zconf = zconf
+        self._chromecasts: dict[UUID, pychromecast.Chromecast] = {}
+
+    @synchronized
+    def get_chromecast_by_ip(self, ip: str) -> pychromecast.Chromecast:
+        for cc in self._chromecasts.values():
+            if cc.socket_client.host == ip:
+                return cc
+        logging.debug(f'Discovered Chromecasts: {self._chromecasts}')
+        raise ChromecastNotFoundError(f'could not find Chromecast with address {ip}')
+
+    @synchronized
+    def add_callback(self, uuid: UUID, name: str):
+        service = self._listener.services[uuid]
+        chromecast = pychromecast.get_chromecast_from_service(service, self._zconf)
+        chromecast.wait()
+        self._chromecasts[uuid] = chromecast
+        logger.debug(f'Discovered new Chromecast: {chromecast}')
+
+    @synchronized
+    def update_callback(self, uuid: UUID, name: str):
+        pass
+
+    @synchronized
+    def remove_callback(self, uuid: UUID, name: str, service):
+        chromecast = self._chromecasts.pop(uuid)
+        logger.debug(f'Removed discovered Chromecast: {chromecast}')
+
+
+class ChromecastSeekableProvider(SeekableProvider):
+    def __init__(self, monitor: ChromecastMonitor):
+        self._monitor = monitor
+
+    def provide_seekable(self, session: Session) -> Seekable:
+        try:
+            chromecast = self._monitor.get_chromecast_by_ip(session.player.address)
+        except ChromecastNotFoundError as e:
+            raise SeekableNotFoundError from e
+
+        plex_ctrl = PlexController()
+        chromecast.register_handler(plex_ctrl)
+        return SeekableChromecastAdapter(plex_ctrl)
 
 
 class SessionExtrapolator(ABC):
@@ -614,8 +691,23 @@ def cmd_default(args: argparse.Namespace, db: Database, app: PlexApplication) ->
         # TODO: Ensure we try HTTP only if HTTPS fails.
         server = server_resource.connect()
 
+    # Build the object hierarchy.
+
+    cc_listener = pychromecast.discovery.CastListener()
+    zconf = zeroconf.Zeroconf()
+    cc_monitor = ChromecastMonitor(cc_listener, zconf)
+
+    cc_listener.add_callback = cc_monitor.add_callback
+    cc_listener.update_callback = cc_monitor.update_callback
+    cc_listener.remove_callback = cc_monitor.remove_callback
+    cc_browser = pychromecast.discovery.start_discovery(cc_listener, zconf)
+
+    seekable_provider = SeekableProviderChain([
+        PlexSeekableProvider(server),
+        ChromecastSeekableProvider(cc_monitor),
+    ])
+
     session_provider = SessionProvider(server)
-    seekable_provider = PlexSeekableProvider(server)
     auto_skipper = AutoSkipper(seekable_provider)
     dispatcher = SessionDispatcher(listener=auto_skipper)
 

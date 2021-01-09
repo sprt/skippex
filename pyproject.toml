@@ -11,6 +11,7 @@ requests = "^2.25.1"
 websocket_client = "^0.57.0"  # For PlexAPI's AlertListener
 PyChromecast = "^7.7.1"
 wrapt = "^1.12.1"
+zeroconf = "^0.28.8"
 
 [tool.poetry.dev-dependencies]
 ipython = "^7.19.0"
