@@ -423,7 +423,7 @@ class AutoSkipper(SessionListener, SessionExtrapolator):
         logger.debug(f'{session.view_offset_ms=}')
         logger.debug(f'{intro_marker=}')
 
-        if intro_marker.start <= view_offset_ms and view_offset_ms < intro_marker.end:
+        if intro_marker.start <= view_offset_ms < intro_marker.end:
             seekable = self._sp.provide_seekable(session)
             seekable.seek(intro_marker.end)
             self._skipped.add(session)
