@@ -470,9 +470,9 @@ class AutoSkipper(SessionListener, SessionExtrapolator):
         intro_marker = next(m for m in session.playable.markers if m.type == 'intro')
         view_offset_ms = session.view_offset_ms
 
-        logger.debug(f'{session.key=}')
-        logger.debug(f'{session.view_offset_ms=}')
-        logger.debug(f'{intro_marker=}')
+        logger.debug(f'session.key={session.key}')
+        logger.debug(f'session.view_offset_ms={session.view_offset_ms}')
+        logger.debug(f'intro_marker={intro_marker}')
 
         if intro_marker.start <= view_offset_ms < intro_marker.end:
             seekable = self._sp.provide_seekable(session)
