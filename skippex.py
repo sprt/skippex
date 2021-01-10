@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 import argparse
 from collections.abc import Callable, Iterator, MutableMapping
@@ -213,6 +211,58 @@ class AlertListener(PlexAlertListener):
         err = args[-1]
         plexapi.log.error('AlertListener Error: %s' % err)
         raise RuntimeError(err)
+
+
+
+@dataclass(frozen=True, eq=False)
+class Session:
+    key: str
+    state: Literal['buffering', 'playing', 'paused', 'stopped']
+    playable: Playable
+    player: PlexClient
+
+    @classmethod
+    def from_playable(cls, playable: Playable) -> 'Session':
+        player = playable.players[0]
+        return cls(
+            key=str(playable.sessionKey),
+            state=player.state,
+            playable=playable,
+            player=player,
+        )
+
+    def __hash__(self):
+        return hash(self.key)
+
+    def __eq__(self, other: object) -> bool:
+        return isinstance(other, self.__class__) and self.key == other.key
+
+
+@dataclass(frozen=True, eq=False)
+class EpisodeSession(Session):
+    playable: Episode
+    view_offset_ms: int
+
+    @classmethod
+    def from_playable(cls, episode: Episode) -> 'EpisodeSession':
+        assert not episode.isFullObject()  # Probably dangerous wrt viewOffset otherwise.
+        player = episode.players[0]
+
+        return cls(
+            key=str(episode.sessionKey),
+            state=player.state,
+            playable=episode,
+            player=player,
+            view_offset_ms=int(episode.viewOffset),
+        )
+
+
+class SessionFactory:
+    @classmethod
+    def make(cls, playable: Playable) -> Session:
+        if isinstance(playable, Episode):
+            return EpisodeSession.from_playable(playable)
+        return Session.from_playable(playable)
 
 
 class SessionListener(ABC):
@@ -481,57 +531,6 @@ class SessionDispatcher:
 
 class SessionNotFoundError(Exception):
     pass
-
-
-@dataclass(frozen=True, eq=False)
-class Session:
-    key: str
-    state: Literal['buffering', 'playing', 'paused', 'stopped']
-    playable: Playable
-    player: PlexClient
-
-    @classmethod
-    def from_playable(cls, playable: Playable) -> Session:
-        player = playable.players[0]
-        return cls(
-            key=str(playable.sessionKey),
-            state=player.state,
-            playable=playable,
-            player=player,
-        )
-
-    def __hash__(self):
-        return hash(self.key)
-
-    def __eq__(self, other: object) -> bool:
-        return isinstance(other, self.__class__) and self.key == other.key
-
-
-@dataclass(frozen=True, eq=False)
-class EpisodeSession(Session):
-    playable: Episode
-    view_offset_ms: int
-
-    @classmethod
-    def from_playable(cls, episode: Episode) -> EpisodeSession:
-        assert not episode.isFullObject()  # Probably dangerous wrt viewOffset otherwise.
-        player = episode.players[0]
-
-        return cls(
-            key=str(episode.sessionKey),
-            state=player.state,
-            playable=episode,
-            player=player,
-            view_offset_ms=int(episode.viewOffset),
-        )
-
-
-class SessionFactory:
-    @classmethod
-    def make(cls, playable: Playable) -> Session:
-        if isinstance(playable, Episode):
-            return EpisodeSession.from_playable(playable)
-        return Session.from_playable(playable)
 
 
 class SessionProvider:
