@@ -16,11 +16,10 @@ from .skippex import (
     AutoSkipper,
     ChromecastMonitor,
     ChromecastSeekableProvider,
-    PlexApplication,
-    PlexAuthClient,
     PlexSeekableProvider,
     SeekableProviderChain
 )
+from .auth import PlexApplication, PlexAuthClient
 from .notifications import NotificationListener
 from .sessions import SessionDiscovery, SessionDispatcher, SessionProvider
 from .stores import Database
