@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 import argparse
-from collections.abc import Callable, Iterator, MutableMapping
 import configparser
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
@@ -11,7 +10,7 @@ import logging
 from pathlib import Path
 import threading
 from time import sleep
-from typing import Any, NamedTuple, Optional, cast
+from typing import Any, Callable, Dict, Iterator, List, MutableMapping, NamedTuple, Optional, Set, Tuple, cast
 from typing_extensions import Literal, TypedDict
 from urllib.parse import urlencode
 from uuid import UUID, uuid4
@@ -118,7 +117,7 @@ class PlexAuthClient:
     def __init__(self, app: PlexApplication):
         self._app = app
 
-    def _make_request(self, method: str, endpoint: str, **kwargs: dict[str, Any]) -> requests.Response:
+    def _make_request(self, method: str, endpoint: str, **kwargs: Dict[str, Any]) -> requests.Response:
         url = self._BASE_API_URL + endpoint
         return requests.request(method, url, **kwargs)
 
@@ -140,7 +139,7 @@ class PlexAuthClient:
         else:
             return True
 
-    def generate_pin(self) -> tuple[int, str]:
+    def generate_pin(self) -> Tuple[int, str]:
         headers = {'Accept': 'application/json'}
         data = {
             'strong': 'true',
@@ -320,7 +319,7 @@ class SeekableProvider(ABC):
 
 
 class SeekableProviderChain(SeekableProvider):
-    def __init__(self, providers: list[SeekableProvider]):
+    def __init__(self, providers: List[SeekableProvider]):
         self._providers = providers
 
     def provide_seekable(self, session: Session) -> Seekable:
@@ -356,7 +355,7 @@ class ChromecastMonitor:
     def __init__(self, listener: pychromecast.CastListener, zconf: zeroconf.Zeroconf):
         self._listener = listener
         self._zconf = zconf
-        self._chromecasts: dict[UUID, pychromecast.Chromecast] = {}
+        self._chromecasts: Dict[UUID, pychromecast.Chromecast] = {}
 
     @synchronized
     def get_chromecast_by_ip(self, ip: str) -> pychromecast.Chromecast:
@@ -405,7 +404,7 @@ class SessionExtrapolator(ABC):
         pass
 
     @abstractmethod
-    def extrapolate(self, session: Session) -> tuple[Session, int]:
+    def extrapolate(self, session: Session) -> Tuple[Session, int]:
         """
         Returns the extrapolated session and the extrapolation delay in ms.
         Called iff trigger_extrapolation(session) returns True.
@@ -415,7 +414,7 @@ class SessionExtrapolator(ABC):
 
 class AutoSkipper(SessionListener, SessionExtrapolator):
     def __init__(self, seekable_provider: SeekableProvider):
-        self._skipped: set[Session] = set()
+        self._skipped: Set[Session] = set()
         self._sp = seekable_provider
 
     def trigger_extrapolation(self, session: Session, listener_accepted: bool) -> bool:
@@ -434,7 +433,7 @@ class AutoSkipper(SessionListener, SessionExtrapolator):
         # In that case, we don't wanna extrapolate the session.
         return session not in self._skipped
 
-    def extrapolate(self, session: Session) -> tuple[Session, int]:
+    def extrapolate(self, session: Session) -> Tuple[Session, int]:
         session = cast(EpisodeSession, session)  # Safe thanks to trigger_extrapolation().
         delay_ms = 1000
         new_view_offset_ms = session.view_offset_ms + delay_ms
@@ -496,7 +495,7 @@ class SessionDispatcher:
         self._removal_timeout_sec = removal_timeout_sec
         # Sessions to track and potentially remove after a period of
         # removal_timeout_sec with no dispatching attempt.
-        self._last_active: dict[Session, datetime] = {}
+        self._last_active: Dict[Session, datetime] = {}
 
     def dispatch(self, session: Session) -> bool:
         """
@@ -573,10 +572,10 @@ class SessionDiscovery:
         # To avoid leaks, preserve the following invariant:
         # timer in dict <=> timer alive,
         # where alive = started and not (done executing or cancelled).
-        self._timers: dict[SessionKey, threading.Timer] = {}
+        self._timers: Dict[SessionKey, threading.Timer] = {}
 
     @synchronized
-    def alert_callback(self, alert: dict[str, Any]):
+    def alert_callback(self, alert: Dict[str, Any]):
         if alert['type'] == 'playing':
             # Never seen a case where the alert doesn't contain exactly one
             # notification, but let's loop over the list out of caution.
