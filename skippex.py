@@ -11,7 +11,8 @@ import logging
 from pathlib import Path
 import threading
 from time import sleep
-from typing import Any, Literal, NamedTuple, Optional, TypedDict, cast
+from typing import Any, NamedTuple, Optional, cast
+from typing_extensions import Literal, TypedDict
 from urllib.parse import urlencode
 from uuid import UUID, uuid4
 import sys
