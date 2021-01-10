@@ -4,11 +4,22 @@ from typing import Any, Callable, Dict
 from urllib.parse import urlparse, urlunparse
 
 from plexapi.server import PlexServer
-from typing_extensions import TypedDict
+from typing_extensions import Literal, TypedDict
 from websocket import WebSocketApp
 
 
 NotificationContainer = Dict[str, Any]
+
+
+class PlaybackNotification(TypedDict):
+    sessionKey: str  # Not an int!
+    guid: str  # Can be the empty string.
+    ratingKey: str
+    url: str  # Can be the empty string.
+    key: str
+    viewOffset: int  # In milliseconds.
+    playQueueItemID: int
+    state: Literal['buffering', 'playing', 'paused', 'stopped']
 
 
 class _MessageDict(TypedDict):
