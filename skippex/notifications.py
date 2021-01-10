@@ -8,10 +8,25 @@ from typing_extensions import Literal, TypedDict
 from websocket import WebSocketApp
 
 
-NotificationContainer = Dict[str, Any]
+class NotificationContainerDict(TypedDict):
+    """Type of the underlying dictionary sent in each WebSocket frame.
+
+    See _MessageDict.
+
+    If type is 'playing', the dictionary also has an entry with key
+    'PlaySessionStateNotification' of type PlaybackNotification.
+    """
+
+    type: str
+    size: int
+
+    # if type == 'playing':
+    #     PlaySessionStateNotification: PlaybackNotification
 
 
 class PlaybackNotification(TypedDict):
+    """Type of NotificationContainerDict['PlaySessionStateNotification']."""
+
     sessionKey: str  # Not an int!
     guid: str  # Can be the empty string.
     ratingKey: str
@@ -24,7 +39,7 @@ class PlaybackNotification(TypedDict):
 
 class _MessageDict(TypedDict):
     """The format of each WebSocket frame emitted by Plex once parsed."""
-    NotificationContainer: Dict[str, Any]
+    NotificationContainer: NotificationContainerDict
 
 
 class LoudWebSocketApp(WebSocketApp):
@@ -44,7 +59,7 @@ class NotificationListener:
     silence exceptions. It also doesn't needlessly spawn a new thread.
     """
 
-    def __init__(self, server: PlexServer, callback: Callable[[NotificationContainer], None]):
+    def __init__(self, server: PlexServer, callback: Callable[[NotificationContainerDict], None]):
         self._server = server
         self._callback = callback
 

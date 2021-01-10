@@ -12,7 +12,7 @@ from plexapi.video import Episode
 from typing_extensions import Literal
 from wrapt import synchronized
 
-from .notifications import NotificationContainer, PlaybackNotification
+from .notifications import NotificationContainerDict, PlaybackNotification
 
 
 logger = logging.getLogger(__name__)
@@ -180,11 +180,11 @@ class SessionDiscovery:
         self._timers: Dict[SessionKey, threading.Timer] = {}
 
     @synchronized
-    def alert_callback(self, alert: NotificationContainer):
+    def alert_callback(self, alert: NotificationContainerDict):
         if alert['type'] == 'playing':
             # Never seen a case where the alert doesn't contain exactly one
             # notification, but let's loop over the list out of caution.
-            for notification in alert['PlaySessionStateNotification']:
+            for notification in alert['PlaySessionStateNotification']:  # type: ignore
                 self._handle_notification(notification)
 
     @synchronized
