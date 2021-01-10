@@ -5,7 +5,6 @@ from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from functools import partial
 from io import TextIOBase
-import json
 import logging
 from pathlib import Path
 import threading
@@ -17,8 +16,6 @@ from uuid import UUID, uuid4
 import sys
 import webbrowser
 
-import plexapi
-from plexapi.alert import AlertListener as PlexAlertListener
 from plexapi.base import Playable
 from plexapi.client import PlexClient
 from plexapi.myplex import MyPlexAccount
@@ -30,6 +27,7 @@ import requests
 from wrapt import synchronized
 import zeroconf
 
+from .notifications import NotificationContainer, NotificationListener
 
 logger = logging.getLogger('skippex')
 
@@ -193,25 +191,6 @@ def cmd_auth(args: argparse.Namespace, db: Database, app: PlexApplication):
 
     db.auth_token = auth_token
     _print_stderr('Authorization successful')
-
-
-class AlertListener(PlexAlertListener):
-    # TODO: Reraise exceptions back to the main thread.
-
-    def _onMessage(self, *args):
-        # The upstream implementation silently logs exceptions when they happen,
-        # and never raises them. We don't want that.
-        message = args[-1]
-        data = json.loads(message)['NotificationContainer']
-        if self._callback:
-            self._callback(data)
-
-    def _onError(self, *args):
-        # The upstream implementation doesn't raise.
-        err = args[-1]
-        plexapi.log.error('AlertListener Error: %s' % err)
-        raise RuntimeError(err)
-
 
 
 @dataclass(frozen=True, eq=False)
@@ -575,7 +554,7 @@ class SessionDiscovery:
         self._timers: Dict[SessionKey, threading.Timer] = {}
 
     @synchronized
-    def alert_callback(self, alert: Dict[str, Any]):
+    def alert_callback(self, alert: NotificationContainer):
         if alert['type'] == 'playing':
             # Never seen a case where the alert doesn't contain exactly one
             # notification, but let's loop over the list out of caution.
@@ -717,9 +696,8 @@ def cmd_default(args: argparse.Namespace, db: Database, app: PlexApplication) ->
         extrapolator=auto_skipper,
     )
 
-    alert_listener = AlertListener(server, discovery.alert_callback)
-    alert_listener.start()
-    alert_listener.join()
+    notif_listener = NotificationListener(server, discovery.alert_callback)
+    notif_listener.run_forever()
 
 
 def main():
