@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "plex-auto-skip"
+name = "skippex"
 version = "0.1.0"
 description = ""
 authors = ["sprt <hellosprt@gmail.com>"]

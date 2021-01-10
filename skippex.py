@@ -33,10 +33,10 @@ from wrapt import synchronized
 import zeroconf
 
 
-logger = logging.getLogger('plexautoskip')
+logger = logging.getLogger('skippex')
 
-_APP_NAME = 'Plex Auto-Skip'
-_PLEXAUTOSKIP_INI = Path('.plexautoskip.ini')
+_APP_NAME = 'Skippex'
+_DATABASE_PATH = Path('.skippex.ini')
 
 SessionKey = str
 Store = MutableMapping[str, Any]
@@ -737,8 +737,8 @@ def main():
         if not tp_name.startswith(logger.name):
             tp_logger.setLevel(logging.WARNING)
 
-    _PLEXAUTOSKIP_INI.touch()
-    f = lambda: open(_PLEXAUTOSKIP_INI, 'r+')
+    _DATABASE_PATH.touch()
+    f = lambda: open(_DATABASE_PATH, 'r+')
     ini_store = INIStore(f, section='database')
     db = Database(ini_store)
     app = PlexApplication(name=_APP_NAME, identifier=db.app_id)
