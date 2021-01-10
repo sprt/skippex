@@ -12,15 +12,15 @@ import pychromecast
 import xdg
 import zeroconf
 
-from .skippex import (
-    AutoSkipper,
+from .auth import PlexApplication, PlexAuthClient
+from .core import AutoSkipper
+from .notifications import NotificationListener
+from .seekables import (
     ChromecastMonitor,
     ChromecastSeekableProvider,
     PlexSeekableProvider,
     SeekableProviderChain
 )
-from .auth import PlexApplication, PlexAuthClient
-from .notifications import NotificationListener
 from .sessions import SessionDiscovery, SessionDispatcher, SessionProvider
 from .stores import Database
 
