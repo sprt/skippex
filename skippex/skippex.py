@@ -1,51 +1,28 @@
 from abc import ABC, abstractmethod
-import argparse
 from dataclasses import replace
-from functools import partial
 import logging
-import shelve
 from time import sleep
 from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple, cast
-from pid.base import PidFileError
 from urllib.parse import urlencode
 from uuid import UUID
-import sys
-import webbrowser
 
 from plexapi.client import PlexClient
-from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
-from pid import PidFile
 import pychromecast
 from pychromecast.controllers.plex import PlexController
 import requests
 from wrapt import synchronized
-import xdg
 import zeroconf
 
-from .notifications import NotificationListener
 from .sessions import (
     EpisodeSession,
     Session,
-    SessionDiscovery,
-    SessionDispatcher,
     SessionExtrapolator,
     SessionListener,
-    SessionProvider,
 )
-from .stores import Database
 
 
-logger = logging.getLogger('skippex')
-
-_APP_NAME = 'Skippex'
-_DATABASE_PATH = xdg.xdg_data_home() / 'skippex.db'
-_PID_DIR = xdg.xdg_runtime_dir()
-_PID_NAME = 'skippex.pid'
-
-
-def _print_stderr(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
+logger = logging.getLogger(__name__)
 
 
 class PlexApplication(NamedTuple):
@@ -121,23 +98,6 @@ class PlexAuthClient:
             sleep(check_interval_sec)
             auth_token = self.check_pin(pin_id, pin_code)
         return auth_token
-
-
-def cmd_auth(args: argparse.Namespace, db: Database, app: PlexApplication):
-    plex_auth = PlexAuthClient(app)
-    pin_id, pin_code = plex_auth.generate_pin()
-    auth_url = plex_auth.generate_auth_url(pin_code)
-
-    webbrowser.open_new_tab(auth_url)
-    _print_stderr('Navigate to the following page to authorize this application:')
-    _print_stderr(auth_url)
-    _print_stderr()
-
-    _print_stderr('Waiting for successful authorization...')
-    auth_token = plex_auth.wait_for_token(pin_id, pin_code)
-
-    db.auth_token = auth_token
-    _print_stderr('Authorization successful')
 
 
 class Seekable(ABC):
@@ -327,104 +287,3 @@ class AutoSkipper(SessionListener, SessionExtrapolator):
 
     def on_session_removal(self, session: Session):
         self._skipped.discard(session)
-
-
-def cmd_default(args: argparse.Namespace, db: Database, app: PlexApplication) -> Optional[int]:
-    try:
-        auth_token = db.auth_token
-    except KeyError:
-        _print_stderr(
-            "No credentials found. Please first run the 'auth' command to "
-            "authorize the application."
-        )
-        return 1
-
-    auth_client = PlexAuthClient(app)
-    if not auth_client.is_token_valid(auth_token):
-        _print_stderr("Token invalid. Please run the 'auth' command to reauthenticate yourself.")
-        return 1
-
-    account = MyPlexAccount(token=auth_token)
-
-    try:
-        server_resource = next(r for r in account.resources() if 'server' in r.provides)
-    except StopIteration:
-        _print_stderr("Couldn't find a Plex server for this account.")
-        return 1
-    else:
-        # TODO: Ensure we try HTTP only if HTTPS fails.
-        server = server_resource.connect()
-
-    # Build the object hierarchy.
-
-    cc_listener = pychromecast.discovery.CastListener()
-    zconf = zeroconf.Zeroconf()
-    cc_monitor = ChromecastMonitor(cc_listener, zconf)
-
-    cc_listener.add_callback = cc_monitor.add_callback
-    cc_listener.update_callback = cc_monitor.update_callback
-    cc_listener.remove_callback = cc_monitor.remove_callback
-    cc_browser = pychromecast.discovery.start_discovery(cc_listener, zconf)
-
-    seekable_provider = SeekableProviderChain([
-        PlexSeekableProvider(server),
-        ChromecastSeekableProvider(cc_monitor),
-    ])
-
-    session_provider = SessionProvider(server)
-    auto_skipper = AutoSkipper(seekable_provider)
-    dispatcher = SessionDispatcher(listener=auto_skipper)
-
-    discovery = SessionDiscovery(
-        server=server,
-        provider=session_provider,
-        dispatcher=dispatcher,
-        extrapolator=auto_skipper,
-    )
-
-    notif_listener = NotificationListener(server, discovery.alert_callback)
-    notif_listener.run_forever()
-
-
-def _main():
-    logging.basicConfig(
-        level=logging.NOTSET,
-        format='%(asctime)s - %(threadName)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s',
-    )
-    logger.setLevel(logging.DEBUG)
-
-    # Disable sub-warning logging for third-party packages.
-    for tp_name, tp_logger in logging.root.manager.loggerDict.items():  # type: ignore
-        if isinstance(tp_logger, logging.PlaceHolder):
-            continue
-        if not tp_name.startswith(logger.name):
-            tp_logger.setLevel(logging.WARNING)
-
-    db = Database(shelve.open(str(_DATABASE_PATH)))
-    app = PlexApplication(name=_APP_NAME, identifier=db.app_id)
-
-    parser = argparse.ArgumentParser()
-    parser.set_defaults(func=partial(cmd_default, db=db, app=app))
-
-    subparsers = parser.add_subparsers(title='subcommands')
-    parser_auth = subparsers.add_parser('auth', help='authorize this application to access your Plex account')
-    parser_auth.set_defaults(func=partial(cmd_auth, db=db, app=app))
-
-    args = parser.parse_args()
-    sys.exit(args.func(args))
-
-
-def main():
-    try:
-        with PidFile(piddir=_PID_DIR, pidname=_PID_NAME):
-            _main()
-    except PidFileError:
-        _print_stderr(
-            f'Another instance of {_APP_NAME} is already running.\n'
-            f'Please terminate it before running this command.'
-        )
-        return 1
-
-
-if __name__ == '__main__':
-    main()
