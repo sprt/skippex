@@ -1,18 +1,17 @@
 from abc import ABC, abstractmethod
 import argparse
-import configparser
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from functools import partial
-from io import TextIOBase
 import logging
-from pathlib import Path
+import shelve
 import threading
 from time import sleep
-from typing import Any, Callable, Dict, Iterator, List, MutableMapping, NamedTuple, Optional, Set, Tuple, cast
+from typing import Any, Dict, List, NamedTuple, Optional, Set, Tuple, cast
+from pid.base import PidFileError
 from typing_extensions import Literal, TypedDict
 from urllib.parse import urlencode
-from uuid import UUID, uuid4
+from uuid import UUID
 import sys
 import webbrowser
 
@@ -21,84 +20,32 @@ from plexapi.client import PlexClient
 from plexapi.myplex import MyPlexAccount
 from plexapi.server import PlexServer
 from plexapi.video import Episode
+from pid import PidFile
 import pychromecast
 from pychromecast.controllers.plex import PlexController
 import requests
 from wrapt import synchronized
+import xdg
 import zeroconf
 
 from .notifications import NotificationContainer, NotificationListener
+from .stores import Database
+
 
 logger = logging.getLogger('skippex')
 
+
 _APP_NAME = 'Skippex'
-_DATABASE_PATH = Path('.skippex.ini')
+_DATABASE_PATH = xdg.xdg_data_home() / 'skippex.db'
+_PID_DIR = xdg.xdg_runtime_dir()
+_PID_NAME = 'skippex.pid'
+
 
 SessionKey = str
-Store = MutableMapping[str, Any]
 
 
 def _print_stderr(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
-
-
-class INIStore(Store):
-    # TODO: Use a file lock (portalocker)
-
-    def __init__(self, get_fp: Callable[[], TextIOBase], section: str):
-        self._get_fp = get_fp
-        self._section = section
-
-    def _read(self) -> configparser.ConfigParser:
-        cp = configparser.ConfigParser()
-        cp.read_file(self._get_fp())
-        try:
-            cp.add_section(self._section)
-        except configparser.DuplicateSectionError:
-            pass
-        return cp
-
-    def _write(self, cp: configparser.ConfigParser):
-        cp.write(self._get_fp())
-
-    def __getitem__(self, k: str) -> Any:
-        cp = self._read()
-        return cp[self._section][k]
-
-    def __setitem__(self, k: str, v: Any):
-        cp = self._read()
-        cp[self._section][k] = v
-        self._write(cp)
-
-    def __delitem__(self, k: str):
-        cp = self._read()
-        del cp[self._section][k]
-        self._write(cp)
-
-    def __iter__(self) -> Iterator:
-        cp = self._read()
-        return iter(cp[self._section])
-
-    def __len__(self) -> int:
-        cp = self._read()
-        return len(cp[self._section])
-
-
-class Database:
-    def __init__(self, store: Store):
-        self._store = store
-
-    @property
-    def app_id(self):
-        return self._store.setdefault('app_id', str(uuid4()))
-
-    @property
-    def auth_token(self) -> str:
-        return self._store['auth_token']
-
-    @auth_token.setter
-    def auth_token(self, value: str):
-        self._store['auth_token'] = value
 
 
 class PlexApplication(NamedTuple):
@@ -419,9 +366,6 @@ class AutoSkipper(SessionListener, SessionExtrapolator):
         return replace(session, view_offset_ms=new_view_offset_ms), delay_ms
 
     def accept_session(self, session: Session) -> bool:
-        # TODO: Should we skip if the user resumes an episode (even with a new
-        # session) during the intro?
-
         if not isinstance(session, EpisodeSession):
             # Only TV shows have intro markers, other media don't interest us.
             logger.debug('Ignored; not an episode')
@@ -700,7 +644,7 @@ def cmd_default(args: argparse.Namespace, db: Database, app: PlexApplication) ->
     notif_listener.run_forever()
 
 
-def main():
+def _main():
     logging.basicConfig(
         level=logging.NOTSET,
         format='%(asctime)s - %(threadName)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s',
@@ -714,10 +658,7 @@ def main():
         if not tp_name.startswith(logger.name):
             tp_logger.setLevel(logging.WARNING)
 
-    _DATABASE_PATH.touch()
-    f = lambda: open(_DATABASE_PATH, 'r+')
-    ini_store = INIStore(f, section='database')
-    db = Database(ini_store)
+    db = Database(shelve.open(str(_DATABASE_PATH)))
     app = PlexApplication(name=_APP_NAME, identifier=db.app_id)
 
     parser = argparse.ArgumentParser()
@@ -729,6 +670,18 @@ def main():
 
     args = parser.parse_args()
     sys.exit(args.func(args))
+
+
+def main():
+    try:
+        with PidFile(piddir=_PID_DIR, pidname=_PID_NAME):
+            _main()
+    except PidFileError:
+        _print_stderr(
+            f'Another instance of {_APP_NAME} is already running.\n'
+            f'Please terminate it before running this command.'
+        )
+        return 1
 
 
 if __name__ == '__main__':
