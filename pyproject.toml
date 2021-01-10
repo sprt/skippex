@@ -8,10 +8,11 @@ authors = ["sprt <hellosprt@gmail.com>"]
 python = "^3.9"
 PlexAPI = "^4.2.0"
 requests = "^2.25.1"
-websocket_client = "^0.57.0"  # For PlexAPI's AlertListener
+websocket_client = "^0.57.0"  # For PlexAPI's AlertListener.
 PyChromecast = "^7.7.1"
 wrapt = "^1.12.1"
 zeroconf = "^0.28.8"
+dataclasses = { version = "^0.7", python = "<3.7" }
 
 [tool.poetry.dev-dependencies]
 ipython = "^7.19.0"

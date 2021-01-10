@@ -171,7 +171,7 @@ requests = "*"
 
 [[package]]
 name = "prompt-toolkit"
-version = "3.0.8"
+version = "3.0.10"
 description = "Library for building powerful interactive command lines in Python"
 category = "dev"
 optional = false
@@ -201,7 +201,7 @@ python-versions = "*"
 
 [[package]]
 name = "pychromecast"
-version = "7.7.1"
+version = "7.7.2"
 description = "Python module to talk to Google Chromecast."
 category = "main"
 optional = false
@@ -210,7 +210,6 @@ python-versions = "*"
 [package.dependencies]
 casttube = ">=0.2.0"
 protobuf = ">=3.0.0"
-requests = ">=2.0"
 zeroconf = ">=0.25.1"
 
 [[package]]
@@ -315,7 +314,7 @@ ifaddr = ">=0.1.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.9"
-content-hash = "3335713845577840cc1831bd87451b67c22659b1da2186696c4b1b51cf926414"
+content-hash = "69da8493f8121d1aa141858b08ac0d715de491743eeac17f63b7ec32228e7b5b"
 
 [metadata.files]
 appnope = [
@@ -382,8 +381,8 @@ plexapi = [
     {file = "PlexAPI-4.2.0.tar.gz", hash = "sha256:1e9b5467e8550a3cdd43db16fa4b501c103673fcc70a0543505bdc58b0909b99"},
 ]
 prompt-toolkit = [
-    {file = "prompt_toolkit-3.0.8-py3-none-any.whl", hash = "sha256:7debb9a521e0b1ee7d2fe96ee4bd60ef03c6492784de0547337ca4433e46aa63"},
-    {file = "prompt_toolkit-3.0.8.tar.gz", hash = "sha256:25c95d2ac813909f813c93fde734b6e44406d1477a9faef7c915ff37d39c0a8c"},
+    {file = "prompt_toolkit-3.0.10-py3-none-any.whl", hash = "sha256:ac329c69bd8564cb491940511957312c7b8959bb5b3cf3582b406068a51d5bb7"},
+    {file = "prompt_toolkit-3.0.10.tar.gz", hash = "sha256:b8b3d0bde65da350290c46a8f54f336b3cbf5464a4ac11239668d986852e79d5"},
 ]
 protobuf = [
     {file = "protobuf-3.14.0-cp27-cp27m-macosx_10_9_x86_64.whl", hash = "sha256:629b03fd3caae7f815b0c66b41273f6b1900a579e2ccb41ef4493a4f5fb84f3a"},
@@ -410,8 +409,8 @@ ptyprocess = [
     {file = "ptyprocess-0.7.0.tar.gz", hash = "sha256:5c5d0a3b48ceee0b48485e0c26037c0acd7d29765ca3fbb5cb3831d347423220"},
 ]
 pychromecast = [
-    {file = "PyChromecast-7.7.1-py2.py3-none-any.whl", hash = "sha256:19d87748e7e1d23caa0205f06d4feab9ab5a2415b7adbf16cf06e52b9641ce11"},
-    {file = "PyChromecast-7.7.1.tar.gz", hash = "sha256:d6fd0382395303b3260ea7a89a850c8c9e5c83e7ce71a5fbd793bb157cf8ad26"},
+    {file = "PyChromecast-7.7.2-py2.py3-none-any.whl", hash = "sha256:d8130ee6b3a846b9e7fc48588db0dbd5432225fc7d38765272e3c87b786e4bdb"},
+    {file = "PyChromecast-7.7.2.tar.gz", hash = "sha256:aad4b145cb8c76b629c700877e49c418810aaabb26ace5035c49940f9657f2f0"},
 ]
 pygments = [
     {file = "Pygments-2.7.3-py3-none-any.whl", hash = "sha256:f275b6c0909e5dafd2d6269a656aa90fa58ebf4a74f8fcf9053195d226b24a08"},
