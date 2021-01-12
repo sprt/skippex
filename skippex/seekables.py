@@ -1,12 +1,15 @@
 from abc import ABC, abstractmethod
 import logging
-from typing import Dict, List
+import threading
+from typing import Dict, List, Tuple
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 from uuid import UUID
 
-from plexapi.client import PlexClient
+from plexapi.client import DEFAULT_MTYPE, PlexClient
 from plexapi.server import PlexServer
 import pychromecast
 from pychromecast.controllers.plex import PlexController
+import requests
 from wrapt.decorators import synchronized
 from zeroconf import Zeroconf
 
@@ -16,6 +19,12 @@ from .sessions import Session
 logger = logging.getLogger(__name__)
 
 
+def _removesuffix(s: str, suffix: str) -> str:
+    if s.endswith(suffix):
+        return s[:-len(suffix)]
+    return s
+
+
 class Seekable(ABC):
     @abstractmethod
     def seek(self, offset_ms: int):
@@ -23,15 +32,85 @@ class Seekable(ABC):
 
 
 class SeekablePlexClient(Seekable):
-    def __init__(self, client: PlexClient):
+    _TIMEOUT_SUFFIX = '-timeout'
+
+    def __init__(self, client: PlexClient, timeout_sec: float = 5):
         self._client = client
+        self._timeout_sec = timeout_sec
+
+        # Save the original PlexClient.query() for future monkey patching in
+        # seek(). Save it here and not in seek() to avoid a potential stack
+        # overflow (with nested method calls) at run-time if we patch a lot.
+        self._original_query = self._client.query
+
+        # HACK: Monkey patch PlexClient.query() so that it takes the specified
+        # timeout into account for the seekTo command.
+        self._client.query = self._patched_query
+
+    # Same signature as PlexClient.query().
+    def _patched_query(self, path, method=None, headers=None, timeout=None, **kwargs):
+        """Patched implementation of self._client.query()."""
+        p = urlparse(path)
+        new_qsl: List[Tuple[str, str]] = []
+
+        for k, v in parse_qsl(p.query):
+            if k == 'type':
+                new_v = _removesuffix(v, self._TIMEOUT_SUFFIX)
+                if new_v != v:
+                    # The suffix was present, override the timeout.
+                    timeout = self._timeout_sec
+                new_qsl.append((k, new_v))
+            else:
+                new_qsl.append((k, v))
+
+        new_query = urlencode(new_qsl, doseq=True)
+        new_path = urlunparse(p._replace(query=new_query))
+
+        return self._original_query(
+            path=new_path,
+            method=method,
+            headers=headers,
+            timeout=timeout,
+            **kwargs
+        )
 
     def seek(self, offset_ms: int):
-        # XXX: When tested against an iPhone client (iOS 14.3, Plex 7.11, Plex
-        # Server 1.21.1.3830), this takes a very long time to return (over 15
-        # seconds), even though the client successfully seeks in less than a
-        # second. Should probably run this in a new thread.
-        self._client.seekTo(offset_ms)
+        """Sends the seeking command in a non-blocking fashion.
+
+        When tested against an iPhone client (iOS 14.3, Plex for iOS 7.11, Plex
+        Media Server 1.21.1.3830), the seeking command takes a long time (over
+        15 seconds) to issue a response, even though the client successfully
+        seeks in less than a second. Therefore, we send the seeking command in
+        a new thread and we only log what happens.
+        """
+        def _seek():
+            def log_timeout_warning():
+                logger.warning(
+                    f'Seeking command timed out for {self._client}, '
+                    f'but seeking might still have happened'
+                )
+
+            try:
+                # HACK: We add a suffix to mtype to signal to the patched method
+                # to use the timeout set on this instance. This is the only way
+                # we have to "pass a message" to PlexClient.query() from this
+                # call.
+                self._client.seekTo(offset_ms, mtype=DEFAULT_MTYPE+self._TIMEOUT_SUFFIX)
+            except requests.Timeout:
+                log_timeout_warning()
+            except requests.ConnectionError as e:
+                # See https://github.com/psf/requests/issues/5430.
+                if 'timed out' in str(e):
+                    log_timeout_warning()
+                raise
+            except Exception:
+                logger.exception(f'Seeking failed for {self._client}')
+            else:
+                logger.debug(f'Seeking succeeded for {self._client}')
+
+        thread = threading.Thread(target=_seek, daemon=True)
+        thread.start()
+        logger.debug(f'Sent seeking command to {self._client}')
 
 
 class SeekableChromecastAdapter(Seekable):
