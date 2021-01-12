@@ -1,34 +1,32 @@
 from typing import Set
+from plexapi.base import Playable
+from plexapi.client import PlexClient
 import pytest
 from unittest.mock import Mock
 
+from plexapi.base import Playable
 from typing_extensions import Literal
 
-from skippex.notifications import PlaybackNotification
 from skippex.sessions import Session, SessionDispatcher, SessionListener
 
 
-def fake_notification(
-    *,
-    sessionKey: str = 'dummy',
-    guid: str = 'dummy',
-    ratingKey: str = 'dummy',
-    url: str = 'dummy',
+def create_fake_session(
     key: str = 'dummy',
-    viewOffset: int = -1,
-    playQueueItemID: int = -1,
     state: Literal['buffering', 'playing', 'paused', 'stopped'] = 'buffering',
-) -> PlaybackNotification:
-    return PlaybackNotification(
-        sessionKey=sessionKey,
-        guid=guid,
-        ratingKey=ratingKey,
-        url=url,
+    playable: Playable = Mock(spec=Playable),
+    player: PlexClient = Mock(spec=PlexClient),
+) -> Session:
+    return Session(
         key=key,
-        viewOffset=viewOffset,
-        playQueueItemID=playQueueItemID,
         state=state,
+        playable=playable,
+        player=player,
     )
+
+
+@pytest.fixture
+def fake_session() -> Session:
+    return create_fake_session()
 
 
 class FakeListener(SessionListener):
@@ -64,45 +62,63 @@ def reject_listener() -> RejectListener:
     return RejectListener()
 
 
-@pytest.fixture
-def mock_session() -> Mock:
-    return Mock(spec=Session)
+class TestSession:
+    s1 = create_fake_session(key='1')
+    s1bis = create_fake_session(key='1')
+    s2 = create_fake_session(key='2')
+    s1_playing = create_fake_session(key='1', state='playing')
+    s1_paused = create_fake_session(key='1', state='paused')
+
+    is_same_cases = [
+        (s1, s2, False),
+        (s1, s1, True),
+        (s2, s2, True),
+        (s1, s1bis, True),
+        (s1_playing, s1_paused, True),
+    ]
+
+    @pytest.mark.parametrize('a, b, is_same', is_same_cases)
+    def test_hash(self, a: Session, b: Session, is_same: bool):
+        assert (hash(a) == hash(b)) is is_same
+
+    @pytest.mark.parametrize('a, b, is_same', is_same_cases)
+    def test_eq(self, a: Session, b: Session, is_same: bool):
+        assert (a == b) is is_same
 
 
 class TestSessionDispatcher:
     def test_dispatch(
         self,
-        mock_session: Mock,
+        fake_session: Session,
         accept_listener: AcceptListener,
         reject_listener: RejectListener,
     ):
         accept_dispatcher = SessionDispatcher(accept_listener)
-        assert accept_dispatcher.dispatch(mock_session)
-        assert mock_session in accept_listener.sessions
+        assert accept_dispatcher.dispatch(fake_session)
+        assert fake_session in accept_listener.sessions
 
         reject_dispatcher = SessionDispatcher(reject_listener)
-        assert not reject_dispatcher.dispatch(mock_session)
-        assert mock_session not in reject_listener.sessions
+        assert not reject_dispatcher.dispatch(fake_session)
+        assert fake_session not in reject_listener.sessions
 
     def test_dispatch_removal(
         self,
-        mock_session: Mock,
         accept_listener: AcceptListener,
     ):
         session_key = '10'
-        mock_session.key = session_key
+        session = create_fake_session(key=session_key)
 
         dispatcher = SessionDispatcher(accept_listener)
-        dispatcher.dispatch(mock_session)
+        dispatcher.dispatch(session)
         dispatcher.dispatch_removal(session_key)
 
-        assert mock_session not in accept_listener.sessions
+        assert fake_session not in accept_listener.sessions
 
     def test_dispatch_removal__discards_inactives(
         self,
-        mock_session: Mock,
+        fake_session: Session,
         accept_listener: AcceptListener,
     ):
         dispatcher = SessionDispatcher(accept_listener, removal_timeout_sec=0)
-        dispatcher.dispatch(mock_session)
-        assert mock_session not in accept_listener.sessions
+        dispatcher.dispatch(fake_session)
+        assert fake_session not in accept_listener.sessions
