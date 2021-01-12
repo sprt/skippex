@@ -128,7 +128,7 @@ class SessionDispatcher:
         # period, in case dispatch_removal() wasn't called for some reason.
         timeout_ago = now - timedelta(seconds=self._removal_timeout_sec)
         for s, last_active in list(self._last_active.items()):
-            if last_active < timeout_ago:
+            if last_active <= timeout_ago:
                 self._listener.on_session_removal(s)
                 del self._last_active[s]
 

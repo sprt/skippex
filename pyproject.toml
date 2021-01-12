@@ -19,6 +19,7 @@ pid = "^3.0.4"
 
 [tool.poetry.dev-dependencies]
 ipython = "<7.17"  # Python 3.6 support was removed in v7.17.
+pytest = "^6.2.1"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
