@@ -154,11 +154,12 @@ class SessionProvider:
 
     def provide(self, session_key: str) -> Session:
         """Raises SessionNotFoundError when the session could not be found."""
+        sessions = self._server.sessions()
         playable: Playable
-        for playable in self._server.sessions():
+        for playable in sessions:
             if str(playable.sessionKey) == session_key:
                 return SessionFactory.make(playable)
-        raise SessionNotFoundError
+        raise SessionNotFoundError(f'could not find session key {session_key} among {sessions}')
 
 
 class SessionDiscovery:
@@ -263,6 +264,15 @@ class SessionDiscovery:
                 # notified if playback starts anyway, so just return
                 # here.
                 logger.debug(f"No session found for 'paused' notification")
+                return
+            elif notification['state'] == 'buffering':
+                # Encountered this issue with an iPhone client that would buffer
+                # a lot at the beginning of the session. To be investigated
+                # further, but it might be that the HTTP API doesn't return a
+                # session, until the first 'playing' notification. Not a huge
+                # deal anyway as long as we get our 'playing' notification, so
+                # let's just warn here.
+                logger.warning(f"No session found for 'buffering' notification")
                 return
             raise
 

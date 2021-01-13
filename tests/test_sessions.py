@@ -1,16 +1,47 @@
 from typing import Set
-from plexapi.base import Playable
-from plexapi.client import PlexClient
-import pytest
 from unittest.mock import Mock
 
 from plexapi.base import Playable
+from plexapi.client import PlexClient
+from plexapi.server import PlexServer
+import pytest
 from typing_extensions import Literal
 
-from skippex.sessions import Session, SessionDispatcher, SessionListener
+from skippex.notifications import PlaybackNotification
+from skippex.sessions import (
+    Session,
+    SessionDiscovery,
+    SessionDispatcher,
+    SessionExtrapolator,
+    SessionListener,
+    SessionNotFoundError,
+    SessionProvider,
+)
 
 
-def create_fake_session(
+def make_fake_notification(
+    sessionKey: str = 'dummy',
+    guid: str = 'dummy',
+    ratingKey: str = 'dummy',
+    url: str = 'dummy',
+    key: str = 'dummy',
+    viewOffset: int = -1,
+    playQueueItemID: int = -1,
+    state: Literal['buffering', 'playing', 'paused', 'stopped'] = 'buffering',
+) -> PlaybackNotification:
+    return PlaybackNotification(
+        sessionKey=sessionKey,
+        guid=guid,
+        ratingKey=ratingKey,
+        url=url,
+        key=key,
+        viewOffset=viewOffset,
+        playQueueItemID=playQueueItemID,
+        state=state,
+    )
+
+
+def make_fake_session(
     key: str = 'dummy',
     state: Literal['buffering', 'playing', 'paused', 'stopped'] = 'buffering',
     playable: Playable = Mock(spec=Playable),
@@ -26,7 +57,7 @@ def create_fake_session(
 
 @pytest.fixture
 def fake_session() -> Session:
-    return create_fake_session()
+    return make_fake_session()
 
 
 class FakeListener(SessionListener):
@@ -63,11 +94,11 @@ def reject_listener() -> RejectListener:
 
 
 class TestSession:
-    s1 = create_fake_session(key='1')
-    s1bis = create_fake_session(key='1')
-    s2 = create_fake_session(key='2')
-    s1_playing = create_fake_session(key='1', state='playing')
-    s1_paused = create_fake_session(key='1', state='paused')
+    s1 = make_fake_session(key='1')
+    s1bis = make_fake_session(key='1')
+    s2 = make_fake_session(key='2')
+    s1_playing = make_fake_session(key='1', state='playing')
+    s1_paused = make_fake_session(key='1', state='paused')
 
     is_same_cases = [
         (s1, s2, False),
@@ -106,7 +137,7 @@ class TestSessionDispatcher:
         accept_listener: AcceptListener,
     ):
         session_key = '10'
-        session = create_fake_session(key=session_key)
+        session = make_fake_session(key=session_key)
 
         dispatcher = SessionDispatcher(accept_listener)
         dispatcher.dispatch(session)
@@ -122,3 +153,25 @@ class TestSessionDispatcher:
         dispatcher = SessionDispatcher(accept_listener, removal_timeout_sec=0)
         dispatcher.dispatch(fake_session)
         assert fake_session not in accept_listener.sessions
+
+
+class TestSessionDiscovery:
+    buffering_notif = make_fake_notification(state='buffering')
+    paused_notif = make_fake_notification(state='paused')
+
+    @pytest.mark.parametrize('notif', [buffering_notif, paused_notif])
+    def test_handle_notification__missing_notification_does_not_raise(self, notif: PlaybackNotification):
+        provider = Mock(spec=SessionProvider)
+        provider.provide.side_effect = Mock(side_effect=SessionNotFoundError)
+
+        server = Mock(spec=PlexServer)
+        dispatcher = Mock(spec=SessionDispatcher)
+        extrapolator = Mock(spec=SessionExtrapolator)
+
+        discovery = SessionDiscovery(
+            server=server,
+            provider=provider,
+            dispatcher=dispatcher,
+            extrapolator=extrapolator,
+        )
+        discovery._handle_notification(notif)  # Shouldn't raise.
