@@ -26,7 +26,7 @@ from .stores import Database
 
 
 _APP_NAME = 'Skippex'
-_APP_ARGV0 = 'skippex'
+_APP_ARGV0 = __package__
 _DATABASE_PATH = xdg.xdg_data_home() / 'skippex.db'
 _PID_DIR = xdg.xdg_runtime_dir()
 _PID_NAME = 'skippex.pid'
@@ -122,15 +122,12 @@ def cmd_run(args: argparse.Namespace, db: Database, app: PlexApplication) -> Opt
 
 
 def _main():
-    logging.basicConfig(
-        level=logging.DEBUG,
-        format='%(asctime)s - %(threadName)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s',
-    )
-
     db = Database(shelve.open(str(_DATABASE_PATH)))
     app = PlexApplication(name=_APP_NAME, identifier=db.app_id)
 
-    parser = argparse.ArgumentParser(_APP_ARGV0)
+    parser = argparse.ArgumentParser(_APP_ARGV0, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('--debug', help='enable debug logging', action='store_true')
+
     subparsers = parser.add_subparsers(title='subcommands', dest='{auth,run}')
     subparsers.required = True
 
@@ -142,6 +139,32 @@ def _main():
     parser_run.add_argument('--server', help='name of your server (default: the first server Skippex finds)')
 
     args = parser.parse_args()
+
+    if args.debug:
+        log_level = logging.DEBUG
+        log_format = '%(asctime)s - %(threadName)s - %(name)s - %(funcName)s - %(levelname)s - %(message)s'
+        log_datefmt = None  # Use the default.
+    else:
+        log_level = logging.INFO
+        log_format = '%(asctime)s - %(levelname)s - %(message)s'
+        log_datefmt = '%Y-%m-%d %H:%M:%S'  # No milliseconds.
+
+        # Disable logging from third-party packages.
+        logger_name: str
+        logger_inst: logging.Logger
+        for logger_name, logger_inst in logging.root.manager.loggerDict.items():  # type: ignore
+            if isinstance(logger_inst, logging.PlaceHolder):
+                continue
+            if not logger_name.startswith(__package__):
+                logger_inst.addHandler(logging.NullHandler())
+                logger_inst.propagate = False
+
+    logging.basicConfig(
+        level=log_level,
+        format=log_format,
+        datefmt=log_datefmt,
+    )
+
     sys.exit(args.func(args))
 
 
