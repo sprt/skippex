@@ -61,6 +61,10 @@ Et voilà!
  * Plex for iOS (both iPhone and iPad)
  * Chromecast v3
 
+The NVIDIA SHIELD might be supported as well, but I don't have one so I can't
+test it. Other players might also be supported. In any case, please inform me
+by [creating a new issue](/issues/new), so I can add your player to this list.
+
 ## Known issues
 
  * With a Chromecast, when seeking to a position, the WebSocket only receives
