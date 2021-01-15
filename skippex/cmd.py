@@ -32,6 +32,9 @@ _PID_DIR = xdg.xdg_runtime_dir()
 _PID_NAME = 'skippex.pid'
 
 
+logger = logging.getLogger(__name__)
+
+
 def _print_stderr(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
@@ -72,11 +75,13 @@ def cmd_run(args: argparse.Namespace, db: Database, app: PlexApplication) -> Opt
         )
         return 1
 
+    logger.info('Verifying token...')
     auth_client = PlexAuthClient(app)
     if not auth_client.is_token_valid(auth_token):
         _print_stderr("Token invalid. Please run the 'auth' command to reauthenticate yourself.")
         return 1
 
+    logger.info('Connecting to Plex server...')
     account = MyPlexAccount(token=auth_token)
     server_resource = _find_server(account, args.server)
 
@@ -118,6 +123,7 @@ def cmd_run(args: argparse.Namespace, db: Database, app: PlexApplication) -> Opt
     )
 
     notif_listener = NotificationListener(server, discovery.alert_callback)
+    logger.info('Ready')
     notif_listener.run_forever()
 
 

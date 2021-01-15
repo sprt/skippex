@@ -116,6 +116,12 @@ class SessionDispatcher:
         Dispatches the session if listener.accept_session(session) is True.
         Returns the result of that call.
         """
+        if isinstance(session, EpisodeSession) and session not in self._last_active:
+            logger.info(
+                f'New session {session.key}: {session.player} is playing {session.playable} '
+                f'(intro marker = {session.playable.hasIntroMarker})'
+            )
+
         accepted = False
         if self._listener.accept_session(session):
             accepted = True
@@ -129,16 +135,20 @@ class SessionDispatcher:
         timeout_ago = now - timedelta(seconds=self._removal_timeout_sec)
         for s, last_active in list(self._last_active.items()):
             if last_active <= timeout_ago:
-                self._listener.on_session_removal(s)
-                del self._last_active[s]
+                self._dispatch_removal(s)
 
         return accepted
+
+    def _dispatch_removal(self, session: Session):
+        if isinstance(session, EpisodeSession):
+            logger.info(f'Session {session.key} ended: {session.player} stopped playing {session.playable}')
+        self._listener.on_session_removal(session)
+        del self._last_active[session]
 
     def dispatch_removal(self, removed_key: SessionKey) -> bool:
         for s in list(self._last_active.keys()):
             if s.key == removed_key:
-                self._listener.on_session_removal(s)
-                del self._last_active[s]
+                self._dispatch_removal(s)
                 return True
         return False
 

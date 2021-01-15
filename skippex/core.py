@@ -76,9 +76,9 @@ class AutoSkipper(SessionListener, SessionExtrapolator):
             seekable = self._sp.provide_seekable(session)
             seekable.seek(intro_marker.end)
             self._skipped.add(session)
-            logger.debug(f'Skipped; seeked from {view_offset_ms} to {intro_marker.end}')
+            logger.info(f'Session {session.key}: skipped intro (seeked from {view_offset_ms} to {intro_marker.end})')
         else:
-            logger.debug('Did not skip; not viewing intro')
+            logger.debug(f'Session {session.key}: did not skip (not viewing intro)')
 
         logger.debug('-----')
 
