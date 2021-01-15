@@ -36,11 +36,11 @@ your Plex account.
 $ skippex auth
 ```
 
-Once that's done, you can simply start Skippex and it'll start monitoring your
-playback sessions and automatically skip intros for you:
+Once that's done, you can simply run Skippex and it'll start monitoring your
+playback sessions and automatically skip intros for you on supported devices:
 
 ```shell
-$ skippex
+$ skippex run
 ```
 
 Et voilà!

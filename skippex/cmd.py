@@ -7,7 +7,7 @@ from typing import Optional
 import webbrowser
 
 from pid import PidFile, PidFileError
-from plexapi.myplex import MyPlexAccount
+from plexapi.myplex import MyPlexAccount, MyPlexResource
 import pychromecast
 import xdg
 import zeroconf
@@ -26,6 +26,7 @@ from .stores import Database
 
 
 _APP_NAME = 'Skippex'
+_APP_ARGV0 = 'skippex'
 _DATABASE_PATH = xdg.xdg_data_home() / 'skippex.db'
 _PID_DIR = xdg.xdg_runtime_dir()
 _PID_NAME = 'skippex.pid'
@@ -52,7 +53,16 @@ def cmd_auth(args: argparse.Namespace, db: Database, app: PlexApplication):
     _print_stderr('Authorization successful')
 
 
-def cmd_default(args: argparse.Namespace, db: Database, app: PlexApplication) -> Optional[int]:
+def _find_server(account: MyPlexAccount, server_name: Optional[str]) -> Optional[MyPlexResource]:
+    for resource in account.resources():
+        if 'server' not in resource.provides:
+            continue
+        if (server_name and resource.name == server_name) or not server_name:
+            return resource
+    return None
+
+
+def cmd_run(args: argparse.Namespace, db: Database, app: PlexApplication) -> Optional[int]:
     try:
         auth_token = db.auth_token
     except KeyError:
@@ -68,15 +78,17 @@ def cmd_default(args: argparse.Namespace, db: Database, app: PlexApplication) ->
         return 1
 
     account = MyPlexAccount(token=auth_token)
+    server_resource = _find_server(account, args.server)
 
-    try:
-        server_resource = next(r for r in account.resources() if 'server' in r.provides)
-    except StopIteration:
-        _print_stderr("Couldn't find a Plex server for this account.")
+    if not server_resource:
+        if args.server:
+            _print_stderr(f"Could not find server '{args.server}' for this account.")
+        else:
+            _print_stderr(f"Could not find a server associated with this account.")
         return 1
-    else:
-        # TODO: Ensure we try HTTP only if HTTPS fails.
-        server = server_resource.connect()
+
+    # TODO: Ensure we try HTTP only if HTTPS fails.
+    server = server_resource.connect()
 
     # Build the object hierarchy.
 
@@ -118,12 +130,16 @@ def _main():
     db = Database(shelve.open(str(_DATABASE_PATH)))
     app = PlexApplication(name=_APP_NAME, identifier=db.app_id)
 
-    parser = argparse.ArgumentParser()
-    parser.set_defaults(func=partial(cmd_default, db=db, app=app))
+    parser = argparse.ArgumentParser(_APP_ARGV0)
+    subparsers = parser.add_subparsers(title='subcommands', dest='{auth,run}')
+    subparsers.required = True
 
-    subparsers = parser.add_subparsers(title='subcommands')
     parser_auth = subparsers.add_parser('auth', help='authorize this application to access your Plex account')
     parser_auth.set_defaults(func=partial(cmd_auth, db=db, app=app))
+
+    parser_run = subparsers.add_parser('run', help='monitor your shows and automatically skip intros')
+    parser_run.set_defaults(func=partial(cmd_run, db=db, app=app))
+    parser_run.add_argument('--server', help='name of your server (default: the first server Skippex finds)')
 
     args = parser.parse_args()
     sys.exit(args.func(args))
