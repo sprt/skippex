@@ -1,5 +1,6 @@
 from unittest.mock import Mock
 
+from plexapi.base import Playable
 from plexapi.client import PlexClient
 from plexapi.video import Episode
 import pytest
@@ -7,7 +8,7 @@ from typing_extensions import Literal
 
 from skippex.core import AutoSkipper
 from skippex.seekables import SeekableProvider
-from skippex.sessions import EpisodeSession, IntroMarker
+from skippex.sessions import EpisodeSession
 
 
 def make_episode_session(
@@ -34,8 +35,13 @@ class TestAutoSkipper:
         return AutoSkipper(seekable_provider=provider)
 
     def test_trigger_extrapolation__returns_false_if_past_intro(self, auto_skipper: AutoSkipper):
+        intro_marker = Mock()
+        intro_marker.type = 'intro'
+        intro_marker.start = 0
+        intro_marker.end = 1000
+
         playable = Mock()
-        playable.markers = [IntroMarker(start=0, end=1000)]
+        playable.markers = [intro_marker]
 
         session = make_episode_session(
             playable=playable,
