@@ -32,3 +32,6 @@ class Database:
     @auth_token.setter
     def auth_token(self, value: str):
         self._store['auth_token'] = value
+
+    def content(self) -> DatabaseStore:
+        return dict(self._store.items())

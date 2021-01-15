@@ -30,13 +30,20 @@ _APP_ARGV0 = __package__
 _DATABASE_PATH = xdg.xdg_data_home() / 'skippex.db'
 _PID_DIR = xdg.xdg_runtime_dir()
 _PID_NAME = 'skippex.pid'
+_PID_PATH = _PID_DIR / _PID_NAME
 
 
 logger = logging.getLogger(__name__)
 
 
-def _print_stderr(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
+def cmd_debug_info(args: argparse.Namespace, db: Database, app: PlexApplication):
+    from pprint import pprint
+
+    print(f'PID path: {_PID_PATH}')
+    print(f'Database path: {_DATABASE_PATH}')
+    print()
+    print(f'Database content:')
+    pprint(db.content())
 
 
 def cmd_auth(args: argparse.Namespace, db: Database, app: PlexApplication):
@@ -133,11 +140,14 @@ def _main():
     parser = argparse.ArgumentParser(_APP_ARGV0, formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--debug', help='enable debug logging', action='store_true')
 
-    subparsers = parser.add_subparsers(title='subcommands', dest='{auth,run}')
+    subparsers = parser.add_subparsers(title='subcommands', metavar='{auth,run}')
     subparsers.required = True
 
     parser_auth = subparsers.add_parser('auth', help='authorize this application to access your Plex account')
     parser_auth.set_defaults(func=partial(cmd_auth, db=db, app=app))
+
+    parser_debug_info = subparsers.add_parser('debug-info')
+    parser_debug_info.set_defaults(func=partial(cmd_debug_info, db=db, app=app))
 
     parser_run = subparsers.add_parser('run', help='monitor your shows and automatically skip intros')
     parser_run.set_defaults(func=partial(cmd_run, db=db, app=app))
