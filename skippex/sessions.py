@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 import logging
 import threading
-from typing import Dict, Tuple
+from typing import Dict, NamedTuple, Optional, Tuple
 
 from plexapi.base import Playable
 from plexapi.client import PlexClient
@@ -44,6 +44,12 @@ class Session:
         return isinstance(other, self.__class__) and self.key == other.key
 
 
+class IntroMarker(NamedTuple):
+    # In milliseconds.
+    start: int
+    end: int
+
+
 @dataclass(frozen=True, eq=False)
 class EpisodeSession(Session):
     playable: Episode
@@ -61,6 +67,12 @@ class EpisodeSession(Session):
             player=player,
             view_offset_ms=int(episode.viewOffset),
         )
+
+    def intro_marker(self) -> Optional[IntroMarker]:
+        if not self.playable.hasIntroMarker:
+            return None
+        internal = next(m for m in self.playable.markers if m.type == 'intro')
+        return IntroMarker(start=internal.start, end=internal.end)
 
 
 class SessionFactory:

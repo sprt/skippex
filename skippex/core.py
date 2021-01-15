@@ -29,6 +29,14 @@ class AutoSkipper(SessionListener, SessionExtrapolator):
         #  - When it's 'stopped', we've already sent a signal to the dispatcher.
 
         if not listener_accepted:
+            logger.debug('No extrapolation: listener rejected')
+            return False
+
+        session = cast(EpisodeSession, session)  # Safe because listener_accepted.
+        intro_marker = session.intro_marker()
+
+        if session.view_offset_ms >= intro_marker.end:
+            logger.debug('No extrapolation: beyond intro')
             return False
 
         # The listener accepted the session, and it may have skipped the intro.
@@ -65,7 +73,7 @@ class AutoSkipper(SessionListener, SessionExtrapolator):
         session = cast(EpisodeSession, session)  # Safe thanks to accept_session().
         logger.debug(f'session_activity: {session}')
 
-        intro_marker = next(m for m in session.playable.markers if m.type == 'intro')
+        intro_marker = session.intro_marker()
         view_offset_ms = session.view_offset_ms
 
         logger.debug(f'session.key={session.key}')
