@@ -63,7 +63,9 @@ Et voilà!
 
 The NVIDIA SHIELD might be supported as well, but I don't have one so I can't
 test it. Other players might also be supported. In any case, please inform me
-by [creating a new issue](/issues/new), so I can add your player to this list.
+by [creating a new issue][new_issue], so I can add your player to this list.
+
+[new_issue]: https://github.com/sprt/skippex/issues/new
 
 ## Known issues
 
