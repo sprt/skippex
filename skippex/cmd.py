@@ -193,3 +193,6 @@ def main():
             f'Please terminate it before running this command.'
         )
         return 1
+    except KeyboardInterrupt:
+        logger.info('Bye')
+        return 0
