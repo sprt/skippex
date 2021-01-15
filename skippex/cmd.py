@@ -45,15 +45,14 @@ def cmd_auth(args: argparse.Namespace, db: Database, app: PlexApplication):
     auth_url = plex_auth.generate_auth_url(pin_code)
 
     webbrowser.open_new_tab(auth_url)
-    _print_stderr('Navigate to the following page to authorize this application:')
-    _print_stderr(auth_url)
-    _print_stderr()
+    logger.info('Navigate to the following page to authorize this application:')
+    logger.info(auth_url)
 
-    _print_stderr('Waiting for successful authorization...')
+    logger.info('Waiting for successful authorization...')
     auth_token = plex_auth.wait_for_token(pin_id, pin_code)
 
     db.auth_token = auth_token
-    _print_stderr('Authorization successful')
+    logger.info('Authorization successful')
 
 
 def _find_server(account: MyPlexAccount, server_name: Optional[str]) -> Optional[MyPlexResource]:
@@ -69,7 +68,7 @@ def cmd_run(args: argparse.Namespace, db: Database, app: PlexApplication) -> Opt
     try:
         auth_token = db.auth_token
     except KeyError:
-        _print_stderr(
+        logger.error(
             "No credentials found. Please first run the 'auth' command to "
             "authorize the application."
         )
@@ -78,7 +77,7 @@ def cmd_run(args: argparse.Namespace, db: Database, app: PlexApplication) -> Opt
     logger.info('Verifying token...')
     auth_client = PlexAuthClient(app)
     if not auth_client.is_token_valid(auth_token):
-        _print_stderr("Token invalid. Please run the 'auth' command to reauthenticate yourself.")
+        logger.error("Token invalid. Please run the 'auth' command to reauthenticate yourself.")
         return 1
 
     logger.info('Connecting to Plex server...')
@@ -87,9 +86,9 @@ def cmd_run(args: argparse.Namespace, db: Database, app: PlexApplication) -> Opt
 
     if not server_resource:
         if args.server:
-            _print_stderr(f"Could not find server '{args.server}' for this account.")
+            logger.error(f"Could not find server '{args.server}' for this account.")
         else:
-            _print_stderr(f"Could not find a server associated with this account.")
+            logger.error(f"Could not find a server associated with this account.")
         return 1
 
     # TODO: Ensure we try HTTP only if HTTPS fails.
@@ -179,7 +178,7 @@ def main():
         with PidFile(piddir=_PID_DIR, pidname=_PID_NAME):
             _main()
     except PidFileError:
-        _print_stderr(
+        logger.error(
             f'Another instance of {_APP_NAME} is already running.\n'
             f'Please terminate it before running this command.'
         )
