@@ -3,7 +3,7 @@
 Skippex skips intros automatically for you on Plex, with support for the
 Chromecast.
 
-**IMPORTANT NOTE**: This is still pretty much beta software. Except bugs and
+**IMPORTANT NOTE**: This is still pretty much beta software. Expect bugs and
 please report them!
 
 ## Installation
@@ -43,7 +43,8 @@ playback sessions and automatically skip intros for you on supported devices:
 $ skippex run
 ```
 
-Et voilà!
+Et voilà! When this command says "Ready", Skippex is monitoring your shows and
+will automatically skip intros for you.
 
 ## Things to know
 
@@ -51,7 +52,7 @@ Et voilà!
  * Only skips once per playback session.
  * Only tested for one account on the local network.
  * Might only work on the local network for standard Plex clients.
- * Most likely works on the local network for Chromecasts.
+ * Only works on the local network for Chromecasts.
  * Solely based on the intro markers detected by Plex; Skippex does not attempt
    to detect intros itself.
 
