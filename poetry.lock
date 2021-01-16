@@ -11,7 +11,7 @@ name = "appnope"
 version = "0.1.2"
 description = "Disable App Nap on macOS >= 10.9"
 category = "dev"
-optional = false
+optional = true
 python-versions = "*"
 
 [[package]]
@@ -41,7 +41,7 @@ name = "backcall"
 version = "0.2.0"
 description = "Specifications for callback functions passed in to an API"
 category = "dev"
-optional = false
+optional = true
 python-versions = "*"
 
 [[package]]
@@ -92,7 +92,7 @@ name = "decorator"
 version = "4.4.2"
 description = "Decorators for Humans"
 category = "dev"
-optional = false
+optional = true
 python-versions = ">=2.6, !=3.0.*, !=3.1.*"
 
 [[package]]
@@ -129,19 +129,18 @@ python-versions = "*"
 
 [[package]]
 name = "importlib-metadata"
-version = "3.4.0"
+version = "1.7.0"
 description = "Read metadata from Python packages"
 category = "dev"
 optional = false
-python-versions = ">=3.6"
+python-versions = "!=3.0.*,!=3.1.*,!=3.2.*,!=3.3.*,!=3.4.*,>=2.7"
 
 [package.dependencies]
-typing-extensions = {version = ">=3.6.4", markers = "python_version < \"3.8\""}
 zipp = ">=0.5"
 
 [package.extras]
-docs = ["sphinx", "jaraco.packaging (>=8.2)", "rst.linker (>=1.9)"]
-testing = ["pytest (>=3.5,!=3.7.3)", "pytest-checkdocs (>=1.2.3)", "pytest-flake8", "pytest-cov", "pytest-enabler", "packaging", "pep517", "pyfakefs", "flufl.flake8", "pytest-black (>=0.3.7)", "pytest-mypy", "importlib-resources (>=1.3)"]
+docs = ["sphinx", "rst.linker"]
+testing = ["packaging", "pep517", "importlib-resources (>=1.3)"]
 
 [[package]]
 name = "importlib-resources"
@@ -171,7 +170,7 @@ name = "ipython"
 version = "7.16.1"
 description = "IPython: Productive Interactive Computing"
 category = "dev"
-optional = false
+optional = true
 python-versions = ">=3.6"
 
 [package.dependencies]
@@ -202,7 +201,7 @@ name = "ipython-genutils"
 version = "0.2.0"
 description = "Vestigial utilities from IPython"
 category = "dev"
-optional = false
+optional = true
 python-versions = "*"
 
 [[package]]
@@ -210,7 +209,7 @@ name = "jedi"
 version = "0.18.0"
 description = "An autocompletion tool for Python that can be used for text editors."
 category = "dev"
-optional = false
+optional = true
 python-versions = ">=3.6"
 
 [package.dependencies]
@@ -236,7 +235,7 @@ name = "parso"
 version = "0.8.1"
 description = "A Python Parser"
 category = "dev"
-optional = false
+optional = true
 python-versions = ">=3.6"
 
 [package.extras]
@@ -248,7 +247,7 @@ name = "pexpect"
 version = "4.8.0"
 description = "Pexpect allows easy control of interactive console applications."
 category = "dev"
-optional = false
+optional = true
 python-versions = "*"
 
 [package.dependencies]
@@ -259,7 +258,7 @@ name = "pickleshare"
 version = "0.7.5"
 description = "Tiny 'shelve'-like database with concurrency support"
 category = "dev"
-optional = false
+optional = true
 python-versions = "*"
 
 [[package]]
@@ -299,11 +298,22 @@ importlib-metadata = {version = ">=0.12", markers = "python_version < \"3.8\""}
 dev = ["pre-commit", "tox"]
 
 [[package]]
+name = "poetry-core"
+version = "1.0.0"
+description = "Poetry PEP 517 Build Backend"
+category = "dev"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
+
+[package.dependencies]
+importlib-metadata = {version = ">=1.7.0,<2.0.0", markers = "python_version >= \"2.7\" and python_version < \"2.8\" or python_version >= \"3.5\" and python_version < \"3.8\""}
+
+[[package]]
 name = "prompt-toolkit"
 version = "3.0.3"
 description = "Library for building powerful interactive command lines in Python"
 category = "dev"
-optional = false
+optional = true
 python-versions = ">=3.6"
 
 [package.dependencies]
@@ -336,7 +346,7 @@ name = "ptyprocess"
 version = "0.7.0"
 description = "Run a subprocess in a pseudo terminal"
 category = "dev"
-optional = false
+optional = true
 python-versions = "*"
 
 [[package]]
@@ -362,10 +372,10 @@ zeroconf = ">=0.25.1"
 
 [[package]]
 name = "pygments"
-version = "2.7.3"
+version = "2.7.4"
 description = "Pygments is a syntax highlighting package written in Python."
 category = "dev"
-optional = false
+optional = true
 python-versions = ">=3.5"
 
 [[package]]
@@ -433,6 +443,14 @@ optional = false
 python-versions = ">=2.6, !=3.0.*, !=3.1.*, !=3.2.*"
 
 [[package]]
+name = "tomlkit"
+version = "0.7.0"
+description = "Style preserving TOML library"
+category = "dev"
+optional = false
+python-versions = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*, !=3.3.*, !=3.4.*"
+
+[[package]]
 name = "tox"
 version = "3.21.1"
 description = "tox is a generic virtualenv management and test command line tool"
@@ -456,11 +474,28 @@ docs = ["pygments-github-lexers (>=0.0.5)", "sphinx (>=2.0.0)", "sphinxcontrib-a
 testing = ["flaky (>=3.4.0)", "freezegun (>=0.3.11)", "psutil (>=5.6.1)", "pytest (>=4.0.0)", "pytest-cov (>=2.5.1)", "pytest-mock (>=1.10.0)", "pytest-randomly (>=1.0.0)", "pytest-xdist (>=1.22.2)", "pathlib2 (>=2.3.3)"]
 
 [[package]]
+name = "tox-poetry-dev-dependencies"
+version = "0.0.9"
+description = "Tox plugin to help working with Poetry-based projects"
+category = "dev"
+optional = false
+python-versions = "~=3.5"
+
+[package.dependencies]
+poetry-core = ">=1.0,<2.0"
+tomlkit = "*"
+tox = "*"
+
+[package.extras]
+dev_package = ["twine", "wheel"]
+dev_test = ["mypy", "pycodestyle", "pydocstyle", "pylint", "pytest", "pytest-mypy", "pytest-pycodestyle", "pytest-pydocstyle", "pytest-pylint", "pytest-yapf3", "yapf"]
+
+[[package]]
 name = "traitlets"
 version = "4.3.3"
 description = "Traitlets Python config system"
 category = "dev"
-optional = false
+optional = true
 python-versions = "*"
 
 [package.dependencies]
@@ -517,7 +552,7 @@ name = "wcwidth"
 version = "0.2.5"
 description = "Measures the displayed width of unicode strings in a terminal"
 category = "dev"
-optional = false
+optional = true
 python-versions = "*"
 
 [[package]]
@@ -570,10 +605,13 @@ python-versions = ">=3.6"
 docs = ["sphinx", "jaraco.packaging (>=3.2)", "rst.linker (>=1.9)"]
 testing = ["pytest (>=3.5,!=3.7.3)", "pytest-checkdocs (>=1.2.3)", "pytest-flake8", "pytest-cov", "jaraco.test (>=3.2.0)", "jaraco.itertools", "func-timeout", "pytest-black (>=0.3.7)", "pytest-mypy"]
 
+[extras]
+ipython = []
+
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.6"
-content-hash = "dc1af88309b2c8a75b48f583b4ff39ee20eb2723544d239f5443eacc1222ee0a"
+content-hash = "ba4cad092068d4e506ac50aa189ee2733e0b32427239383cefb089b3d09f407c"
 
 [metadata.files]
 appdirs = [
@@ -637,8 +675,8 @@ ifaddr = [
     {file = "ifaddr-0.1.7.tar.gz", hash = "sha256:1f9e8a6ca6f16db5a37d3356f07b6e52344f6f9f7e806d618537731669eb1a94"},
 ]
 importlib-metadata = [
-    {file = "importlib_metadata-3.4.0-py3-none-any.whl", hash = "sha256:ace61d5fc652dc280e7b6b4ff732a9c2d40db2c0f92bc6cb74e07b73d53a1771"},
-    {file = "importlib_metadata-3.4.0.tar.gz", hash = "sha256:fa5daa4477a7414ae34e95942e4dd07f62adf589143c875c133c1e53c4eff38d"},
+    {file = "importlib_metadata-1.7.0-py2.py3-none-any.whl", hash = "sha256:dc15b2969b4ce36305c51eebe62d418ac7791e9a157911d58bfb1f9ccd8e2070"},
+    {file = "importlib_metadata-1.7.0.tar.gz", hash = "sha256:90bb658cdbbf6d1735b6341ce708fc7024a3e14e99ffdc5783edea9f9b077f83"},
 ]
 importlib-resources = [
     {file = "importlib_resources-5.0.0-py3-none-any.whl", hash = "sha256:ea17df80a0ff04b5dbd3d96dbeab1842acfd1c6c902eaeb8c8858abf2720161e"},
@@ -686,6 +724,10 @@ plexapi = [
 pluggy = [
     {file = "pluggy-0.13.1-py2.py3-none-any.whl", hash = "sha256:966c145cd83c96502c3c3868f50408687b38434af77734af1e9ca461a4081d2d"},
     {file = "pluggy-0.13.1.tar.gz", hash = "sha256:15b2acde666561e1298d71b523007ed7364de07029219b604cf808bfa1c765b0"},
+]
+poetry-core = [
+    {file = "poetry-core-1.0.0.tar.gz", hash = "sha256:6a664ff389b9f45382536f8fa1611a0cb4d2de7c5a5c885db1f0c600cd11fbd5"},
+    {file = "poetry_core-1.0.0-py2.py3-none-any.whl", hash = "sha256:769288e0e1b88dfcceb3185728f0b7388b26d5f93d6c22d2dcae372da51d200d"},
 ]
 prompt-toolkit = [
     {file = "prompt_toolkit-3.0.3-py3-none-any.whl", hash = "sha256:c93e53af97f630f12f5f62a3274e79527936ed466f038953dfa379d4941f651a"},
@@ -754,8 +796,8 @@ pychromecast = [
     {file = "PyChromecast-7.7.2.tar.gz", hash = "sha256:aad4b145cb8c76b629c700877e49c418810aaabb26ace5035c49940f9657f2f0"},
 ]
 pygments = [
-    {file = "Pygments-2.7.3-py3-none-any.whl", hash = "sha256:f275b6c0909e5dafd2d6269a656aa90fa58ebf4a74f8fcf9053195d226b24a08"},
-    {file = "Pygments-2.7.3.tar.gz", hash = "sha256:ccf3acacf3782cbed4a989426012f1c535c9a90d3a7fc3f16d231b9372d2b716"},
+    {file = "Pygments-2.7.4-py3-none-any.whl", hash = "sha256:bc9591213a8f0e0ca1a5e68a479b4887fdc3e75d0774e5c71c31920c427de435"},
+    {file = "Pygments-2.7.4.tar.gz", hash = "sha256:df49d09b498e83c1a73128295860250b0b7edd4c723a32e9bc0d295c7c2ec337"},
 ]
 pyparsing = [
     {file = "pyparsing-2.4.7-py2.py3-none-any.whl", hash = "sha256:ef9d7589ef3c200abe66653d3f1ab1033c3c419ae9b9bdb1240a85b024efc88b"},
@@ -777,9 +819,17 @@ toml = [
     {file = "toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b"},
     {file = "toml-0.10.2.tar.gz", hash = "sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f"},
 ]
+tomlkit = [
+    {file = "tomlkit-0.7.0-py2.py3-none-any.whl", hash = "sha256:6babbd33b17d5c9691896b0e68159215a9387ebfa938aa3ac42f4a4beeb2b831"},
+    {file = "tomlkit-0.7.0.tar.gz", hash = "sha256:ac57f29693fab3e309ea789252fcce3061e19110085aa31af5446ca749325618"},
+]
 tox = [
     {file = "tox-3.21.1-py2.py3-none-any.whl", hash = "sha256:8a28facf65275c84b3bfde102afe24541d2ce02fd83ea07ce906537c3a74ed2d"},
     {file = "tox-3.21.1.tar.gz", hash = "sha256:31379f2662393034203c5d6b2ebb7b86c67452cfc689784475c1c6e4a3cbc0cd"},
+]
+tox-poetry-dev-dependencies = [
+    {file = "tox-poetry-dev-dependencies-0.0.9.tar.gz", hash = "sha256:1a4a409190537a0084090f32d3b7c8ff5daa5d800b7571eb2098db996c656fb1"},
+    {file = "tox_poetry_dev_dependencies-0.0.9-py3-none-any.whl", hash = "sha256:5e826edd7213525576168b8beec53f62fb1534c3161fb9bc3de67a5d6d8a4f48"},
 ]
 traitlets = [
     {file = "traitlets-4.3.3-py2.py3-none-any.whl", hash = "sha256:70b4c6a1d9019d7b4f6846832288f86998aa3b9207c6821f3578a6a6a467fe44"},
