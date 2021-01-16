@@ -1,6 +1,7 @@
 import argparse
 from functools import partial
 import logging
+import os
 import shelve
 import sys
 from typing import Optional
@@ -25,11 +26,16 @@ from .sessions import SessionDiscovery, SessionDispatcher, SessionProvider
 from .stores import Database
 
 
+if os.getenv('SK_DEV', '0') == '1':
+    _DATABASE_PATH = xdg.xdg_data_home() / 'skippex_dev.db'
+    _PID_NAME = 'skippex_dev.pid'
+else:
+    _DATABASE_PATH = xdg.xdg_data_home() / 'skippex.db'
+    _PID_NAME = 'skippex.pid'
+
 _APP_NAME = 'Skippex'
 _APP_ARGV0 = __package__
-_DATABASE_PATH = xdg.xdg_data_home() / 'skippex.db'
 _PID_DIR = xdg.xdg_runtime_dir()
-_PID_NAME = 'skippex.pid'
 _PID_PATH = _PID_DIR / _PID_NAME
 
 
