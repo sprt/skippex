@@ -4,6 +4,9 @@ version = "0.1.0"
 description = "Automatic 'skip intro' for Plex with Chromecast support"
 authors = ["sprt <hellosprt@gmail.com>"]
 
+[tool.poetry.scripts]
+skippex = 'skippex.cmd:main'
+
 [tool.poetry.dependencies]
 python = "^3.6"
 PlexAPI = "^4.2.0"
