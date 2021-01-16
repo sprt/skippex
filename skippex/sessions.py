@@ -233,6 +233,7 @@ class SessionDiscovery:
             self._dispatch_and_schedule_extrapolated,
             args=(new_session,),
         )
+        new_timer.daemon = True
         new_timer.start()
         self._timers[new_session.key] = new_timer
 
