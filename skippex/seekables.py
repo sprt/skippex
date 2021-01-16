@@ -85,9 +85,14 @@ class SeekablePlexClient(Seekable):
         """
         def _seek():
             def log_timeout_warning():
+                # About "Advertize as player": If the user disables that setting
+                # while Skippex is running, seeking will timeout (and not
+                # happen), even though PlexSeekableProvider found the client.
                 logger.warning(
-                    f'Seeking command timed out for {self._client}, '
-                    f'but seeking might still have happened'
+                    f'Seeking command timed out for {self._client}, but '
+                    f'seeking might still have happened. If not, please ensure '
+                    f'that the "Advertize as player" setting is enabled for '
+                    f'your client.'
                 )
 
             try:
@@ -122,7 +127,24 @@ class SeekableChromecastAdapter(Seekable):
 
 
 class SeekableNotFoundError(Exception):
+    def has_plex_player_not_found(self) -> bool:
+        return isinstance(self, PlexPlayerNotFoundError)
+
+
+class PlexPlayerNotFoundError(SeekableNotFoundError):
     pass
+
+
+class SeekableNotFoundErrorChain(SeekableNotFoundError):
+    def __init__(self, exceptions: List[SeekableNotFoundError], *args: object):
+        super().__init__(exceptions, *args)
+        self.exceptions = exceptions
+
+    def has_plex_player_not_found(self) -> bool:
+        for e in self.exceptions:
+            if isinstance(e, PlexPlayerNotFoundError):
+                return True
+        return False
 
 
 class SeekableProvider(ABC):
@@ -137,12 +159,14 @@ class SeekableProviderChain(SeekableProvider):
         self._providers = providers
 
     def provide_seekable(self, session: Session) -> Seekable:
-        for provider in self._providers[:-1]:
+        exceptions = []
+        for provider in self._providers:
             try:
                 return provider.provide_seekable(session)
-            except SeekableNotFoundError:
-                pass
-        return self._providers[-1].provide_seekable(session)
+            except SeekableNotFoundError as e:
+                exceptions.append(e)
+        else:
+            raise SeekableNotFoundErrorChain(exceptions)
 
 
 class PlexSeekableProvider(SeekableProvider):
@@ -156,7 +180,7 @@ class PlexSeekableProvider(SeekableProvider):
         for client in self._server.clients():
             if client.machineIdentifier == sess_machine_id:
                 return SeekablePlexClient(client)
-        raise SeekableNotFoundError
+        raise PlexPlayerNotFoundError(f'could not find Plex player with machine ID {sess_machine_id}')
 
 
 class ChromecastNotFoundError(Exception):
@@ -206,7 +230,9 @@ class ChromecastSeekableProvider(SeekableProvider):
         try:
             chromecast = self._monitor.get_chromecast_by_ip(session.player.address)
         except ChromecastNotFoundError as e:
-            raise SeekableNotFoundError from e
+            raise SeekableNotFoundError(
+                f'could not find Chromecast with address {session.player.address}'
+            ) from e
 
         plex_ctrl = PlexController()
         chromecast.register_handler(plex_ctrl)

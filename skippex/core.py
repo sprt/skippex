@@ -2,7 +2,7 @@ from dataclasses import replace
 import logging
 from typing import Set, Tuple, cast
 
-from .seekables import SeekableProvider
+from .seekables import SeekableNotFoundError, SeekableProvider
 from .sessions import (
     EpisodeSession,
     Session,
@@ -81,7 +81,17 @@ class AutoSkipper(SessionListener, SessionExtrapolator):
         logger.debug(f'intro_marker={intro_marker}')
 
         if intro_marker.start <= view_offset_ms < intro_marker.end:
-            seekable = self._sp.provide_seekable(session)
+            try:
+                seekable = self._sp.provide_seekable(session)
+            except SeekableNotFoundError as e:
+                if e.has_plex_player_not_found():
+                    logger.error(
+                        'Plex player not found for session; ensure "advertize '
+                        'as player" is enabled'
+                    )
+                logger.exception(f'Cannot skip intro for session {session.key}')
+                return
+
             seekable.seek(intro_marker.end)
             self._skipped.add(session)
             logger.info(f'Session {session.key}: skipped intro (seeked from {view_offset_ms} to {intro_marker.end})')
