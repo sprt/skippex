@@ -25,7 +25,7 @@ RUN pip install "poetry==$POETRY_VERSION"
 RUN python -m venv /venv
 
 COPY pyproject.toml poetry.lock ./
-RUN poetry export -f requirements.txt | /venv/bin/pip install -r /dev/stdin
+RUN poetry export --dev -f requirements.txt | /venv/bin/pip install -r /dev/stdin
 
 COPY . .
 RUN poetry build && /venv/bin/pip install dist/*.whl
@@ -45,9 +45,9 @@ ENV XDG_DATA_HOME=/config \
 RUN mkdir -p "$XDG_DATA_HOME" "$XDG_RUNTIME_DIR"
 
 COPY docker-entrypoint.sh .
-RUN chmod +x docker-entrypoint.sh
-
+COPY ./pyproject.toml ./pyproject.toml
 COPY --from=builder /venv /venv
-COPY ./skippex ./skippex
+COPY ./tests ./tests
+RUN chmod +x docker-entrypoint.sh
 
 ENTRYPOINT ["./docker-entrypoint.sh"]

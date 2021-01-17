@@ -15,25 +15,45 @@ Prerequisites:
  1. Ensure the repo is clean (`git status`).
  1. Ensure all the tests pass.
 
+<!-- TODO: Tag with latest only after Docker test OK. -->
+
 ```console
 $ poetry version <bump>
 $ git add pyproject.tml && git commit -m "vX.X.X release"
 $ git tag -a vX.X.X -m "vX.X.X release"
 
 $ # Create Docker image
-$ docker build -t ghcr.io/sprt/skippex:vX.X.X -t ghcr.io/sprt/skippex:latest .
+$ docker build -t ghcr.io/sprt/skippex:X.X.X -t ghcr.io/sprt/skippex:latest .
 $ # TODO: Test image.
 $ # Publish on PYPI.
 $ poetry publish --build
 $ # Publish on GitHub Container Registry.
-$ docker push ghcr.io/sprt/skippex:vX.X.X
+$ docker push ghcr.io/sprt/skippex:X.X.X
 $ docker push ghcr.io/sprt/skippex:latest
 $ # Push to git repo.
 $ git push --follow-tags
 ```
 
-## Building the Docker image
+## Building a development Docker image
 
 ```console
-$ docker build -t ghcr.io/sprt/skippex:untagged .
+$ docker build -t ghcr.io/sprt/skippex:dev .
+```
+
+And later running this dev image:
+
+```console
+$ docker run --rm -v skippex-dev:/config --network host ghcr.io/sprt/skippex:dev run
+```
+
+Running the tests inside it:
+
+```console
+$ docker run --rm --network host --entrypoint sh ghcr.io/sprt/skippex:dev -c ". /venv/bin/activate && python -m pytest"
+```
+
+Inspecting it with a shell:
+
+```console
+$ docker run --rm --network host --entrypoint sh -it ghcr.io/sprt/skippex:dev
 ```
