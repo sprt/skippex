@@ -45,7 +45,7 @@ your Plex account.
   </tr>
   <tr>
     <td>
-      <code>$ docker run -v skippex:/config ghcr.io/sprt/skippex auth</code>
+      <code>$ docker run -v skippex:/config --network host ghcr.io/sprt/skippex auth</code>
     </td>
     <td>
       <code>$ skippex auth</code>
@@ -63,7 +63,7 @@ playback sessions and automatically skip intros for you on supported devices:
   </tr>
   <tr>
     <td>
-      <code>$ docker run -v skippex:/config ghcr.io/sprt/skippex run</code>
+      <code>$ docker run -v skippex:/config --network host ghcr.io/sprt/skippex run</code>
     </td>
     <td>
       <code>$ skippex run</code>
@@ -73,6 +73,11 @@ playback sessions and automatically skip intros for you on supported devices:
 
 Et voilà! When this command says "Ready", Skippex is monitoring your shows and
 will automatically skip intros for you.
+
+*Note: Due to a [Chromecast limitation][cast-diff-subnets], the Docker container
+has to run with host mode networking.*
+
+[cast-diff-subnets]: https://www.home-assistant.io/integrations/cast#docker-and-cast-devices-and-home-assistant-on-different-subnets
 
 ## Things to know
 
