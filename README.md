@@ -8,18 +8,24 @@ please report them!
 
 ## Installation
 
-**Docker installation coming soon.**
+Installing Skippex through **Docker** is the easiest way to get started:
 
-As this is a Python application, I personally recommend using [pipx][pipx],
-which will install Skippex in its own virtual environment:
+```console
+$ docker pull ghcr.io/sprt/skippex
+```
 
-```shell
+*Docker-compose example coming soon.*
+
+If you prefer not to use Docker, you can also use [**pipx**][pipx], which will
+install Skippex in its own virtual environment:
+
+```console
 $ pipx install skippex
 ```
 
-Or you can just use pip:
+Or you can just use **pip**:
 
-```shell
+```console
 $ pip install --user skippex
 ```
 
@@ -32,16 +38,38 @@ with Plex using the following command. This will open a new tab in your Web
 browser allowing you to authenticate and authorize the application to access
 your Plex account.
 
-```shell
-$ skippex auth
-```
+<table>
+  <tr>
+    <th>Docker</th>
+    <th>pipx & pip</th>
+  </tr>
+  <tr>
+    <td>
+      <code>$ docker run -v skippex:/config ghcr.io/sprt/skippex auth</code>
+    </td>
+    <td>
+      <code>$ skippex auth</code>
+    </td>
+  </tr>
+</table>
 
 Once that's done, you can simply run Skippex and it'll start monitoring your
 playback sessions and automatically skip intros for you on supported devices:
 
-```shell
-$ skippex run
-```
+<table>
+  <tr>
+    <th>Docker</th>
+    <th>pipx & pip</th>
+  </tr>
+  <tr>
+    <td>
+      <code>$ docker run -v skippex:/config ghcr.io/sprt/skippex run</code>
+    </td>
+    <td>
+      <code>$ skippex run</code>
+    </td>
+  </tr>
+</table>
 
 Et voilà! When this command says "Ready", Skippex is monitoring your shows and
 will automatically skip intros for you.

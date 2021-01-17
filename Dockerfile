@@ -34,6 +34,8 @@ RUN poetry build && /venv/bin/pip install dist/*.whl
 
 FROM base as final
 
+VOLUME /config
+
 # Path XDG_DATA_HOME doesn't exist.
 # Variable XDG_RUNTIME_DIR isn't set.
 ENV XDG_DATA_HOME=/config \
