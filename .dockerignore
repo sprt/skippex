@@ -1,4 +1,12 @@
-# CONSIDER UPDATING .dockerignore AS WELL WHEN UPDATING THIS FILE.
+# Git
+.git
+.gitignore
+
+# Docker
+docker-compose.yml
+.docker
+
+# Below same as .gitignore
 
 # Created by https://www.toptal.com/developers/gitignore/api/python
 # Edit at https://www.toptal.com/developers/gitignore?templates=python

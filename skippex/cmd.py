@@ -28,6 +28,9 @@ from .sessions import SessionDiscovery, SessionDispatcher, SessionProvider
 from .stores import Database
 
 
+# Note: Don't assume that the XDG paths are all different from each other (see
+# Dockerfile).
+
 if os.getenv('SK_DEV', '0') == '1':
     _DATABASE_PATH = xdg.xdg_data_home() / 'skippex_dev.db'
     _PID_NAME = 'skippex_dev.pid'
