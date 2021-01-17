@@ -21,14 +21,15 @@ $ git add pyproject.tml && git commit -m "vX.X.X release"
 $ git tag -a vX.X.X -m "vX.X.X release"
 
 $ # Create Docker image
-$ docker build -t ghcr.io/sprt/skippex:vX.X.X .
+$ docker build -t ghcr.io/sprt/skippex:vX.X.X -t ghcr.io/sprt/skippex:latest .
 $ # TODO: Test image.
-$ # Push to repo.
-$ git push --follow-tags
 $ # Publish on PYPI.
 $ poetry publish --build
 $ # Publish on GitHub Container Registry.
 $ docker push ghcr.io/sprt/skippex:vX.X.X
+$ docker push ghcr.io/sprt/skippex:latest
+$ # Push to git repo.
+$ git push --follow-tags
 ```
 
 ## Building the Docker image
