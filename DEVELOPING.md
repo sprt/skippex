@@ -13,18 +13,19 @@ Prerequisites:
 
  1. Ensure we're on branch main (`git branch`).
  1. Ensure the repo is clean (`git status`).
- 1. Ensure all the tests pass.
-
-<!-- TODO: Tag with latest only after Docker test OK. -->
+ 1. Ensure all the tests pass (`tox`).
 
 ```console
 $ poetry version <bump>
 $ git add pyproject.tml && git commit -m "vX.X.X release"
 $ git tag -a vX.X.X -m "vX.X.X release"
 
-$ # Create Docker image
-$ docker build -t ghcr.io/sprt/skippex:X.X.X -t ghcr.io/sprt/skippex:latest .
-$ # TODO: Test image.
+$ # Create Docker image.
+$ docker build -t ghcr.io/sprt/skippex:X.X.X .
+$ # Test image.
+$ docker run --rm --network host --entrypoint sh ghcr.io/sprt/skippex:X.X.X -c ". /venv/bin/activate && python -m pytest"
+$ # Tag image with "latest".
+$ docker tag ghcr.io/sprt/skippex:X.X.X ghcr.io/sprt/skippex:latest
 $ # Publish on PYPI.
 $ poetry publish --build
 $ # Publish on GitHub Container Registry.
