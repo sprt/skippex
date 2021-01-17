@@ -82,10 +82,8 @@ has to run with host mode networking.*
 ## Things to know
 
  * **Clients need to have "Advertise as player" enabled.**
+ * Only works for players on the local network.
  * Only skips once per playback session.
- * Only tested for one account on the local network.
- * Might only work on the local network for standard Plex clients.
- * Only works on the local network for Chromecasts.
  * Solely based on the intro markers detected by Plex; Skippex does not attempt
    to detect intros itself.
 
