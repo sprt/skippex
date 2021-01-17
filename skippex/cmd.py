@@ -2,8 +2,10 @@ import argparse
 from functools import partial
 import logging
 import os
+from pathlib import Path
 import shelve
 import sys
+import tempfile
 from typing import Optional
 import webbrowser
 
@@ -35,7 +37,7 @@ else:
 
 _APP_NAME = 'Skippex'
 _APP_ARGV0 = __package__
-_PID_DIR = xdg.xdg_runtime_dir()
+_PID_DIR = xdg.xdg_runtime_dir() or Path(tempfile.gettempdir())
 _PID_PATH = _PID_DIR / _PID_NAME
 
 
