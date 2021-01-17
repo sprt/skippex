@@ -85,13 +85,13 @@ class SeekablePlexClient(Seekable):
         """
         def _seek():
             def log_timeout_warning():
-                # About "Advertize as player": If the user disables that setting
+                # About "Advertise as player": If the user disables that setting
                 # while Skippex is running, seeking will timeout (and not
                 # happen), even though PlexSeekableProvider found the client.
                 logger.warning(
                     f'Seeking command timed out for {self._client}, but '
                     f'seeking might still have happened. If not, please ensure '
-                    f'that the "Advertize as player" setting is enabled for '
+                    f'that the "Advertise as player" setting is enabled for '
                     f'your client.'
                 )
 
@@ -175,7 +175,7 @@ class PlexSeekableProvider(SeekableProvider):
 
     def provide_seekable(self, session: Session) -> Seekable:
         sess_machine_id = session.player.machineIdentifier
-        # NOTE: Have to "advertize as player" in order to be considered a client by Plex.
+        # NOTE: Have to "advertise as player" in order to be considered a client by Plex.
         client: PlexClient
         for client in self._server.clients():
             if client.machineIdentifier == sess_machine_id:

@@ -86,7 +86,7 @@ class AutoSkipper(SessionListener, SessionExtrapolator):
             except SeekableNotFoundError as e:
                 if e.has_plex_player_not_found():
                     logger.error(
-                        'Plex player not found for session; ensure "advertize '
+                        'Plex player not found for session; ensure "advertise '
                         'as player" is enabled'
                     )
                 logger.exception(f'Cannot skip intro for session {session.key}')

@@ -81,7 +81,7 @@ has to run with host mode networking.*
 
 ## Things to know
 
- * **Clients need to have "Advertize as player" enabled.**
+ * **Clients need to have "Advertise as player" enabled.**
  * Only skips once per playback session.
  * Only tested for one account on the local network.
  * Might only work on the local network for standard Plex clients.
