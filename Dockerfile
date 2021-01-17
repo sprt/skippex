@@ -2,6 +2,8 @@
 # https://stackoverflow.com/a/57886655/407054
 # https://pythonspeed.com/docker/
 
+LABEL org.opencontainers.image.source=https://github.com/sprt/skippex
+
 # base
 
 FROM python:3.9.1 as base
