@@ -40,9 +40,10 @@ ENV XDG_DATA_HOME=/config \
     XDG_RUNTIME_DIR=/run
 RUN mkdir -p "$XDG_DATA_HOME" "$XDG_RUNTIME_DIR"
 
+COPY docker-entrypoint.sh .
+RUN chmod +x docker-entrypoint.sh
+
 COPY --from=builder /venv /venv
 COPY ./skippex ./skippex
 
-COPY docker-entrypoint.sh .
-RUN chmod +x docker-entrypoint.sh
 ENTRYPOINT ["./docker-entrypoint.sh"]
