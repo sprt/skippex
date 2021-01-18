@@ -25,13 +25,11 @@ xdg = "^5.0.1"
 pid = "^3.0.4"
 
 [tool.poetry.dev-dependencies]
-ipython = { version = "<7.17", optional = true }  # Python 3.6 support was removed in v7.17.
+ipython = "<7.17"  # Python 3.6 support was removed in v7.17.
 pytest = "^6.2.1"
 tox = "^3.21.1"
 tox-poetry-dev-dependencies = "^0.0.9"
-
-[tool.poetry.extras]
-ipython = ["ipython"]
+subprocess-tee = "^0.2.0"
 
 [tool.pytest.ini_options]
 filterwarnings = [
