@@ -114,6 +114,12 @@ if __name__ == '__main__':
         format='[%(levelname)-8s] %(message)s',
     )
 
+    try:
+        version_bump = sys.argv[1]
+    except IndexError:
+        print('usage: python release.py <version bump>')
+        sys.exit(2)
+
     tx = Transaction()
 
     with tx:
@@ -130,7 +136,7 @@ if __name__ == '__main__':
 
         # Bump the version in pyproject.toml.
         p_poetry_version = tx.execute(
-            'poetry version "3.0.0"',
+            f'poetry version {version_bump!r}',
             rollback='git checkout HEAD -- pyproject.toml',
         )
 
