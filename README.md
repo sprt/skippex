@@ -1,7 +1,17 @@
-# Skippex
+<h1 align="center">
+  Skippex<br>
+  <img src="https://img.shields.io/pypi/v/skippex">
+  <img src="https://img.shields.io/pypi/status/skippex">
+  <img src="https://img.shields.io/badge/plex%20web%20app-supported-success">
+  <img src="https://img.shields.io/badge/chromecast-supported-success">
+  <img src="https://img.shields.io/badge/plex%20for%20iOS-supported-success">
+  <img src="https://img.shields.io/badge/remote%20users-unsupported-critical">
+</h1>
 
-Skippex skips intros automatically for you on Plex, with support for the
-Chromecast.
+<p align="center">
+  <em>Skippex automatically skips intros for you on Plex, with support for the
+  Chromecast.</em>
+</p>
 
 **IMPORTANT NOTE**: This is still pretty much beta software. Expect bugs and
 please report them!
