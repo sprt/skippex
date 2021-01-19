@@ -163,7 +163,7 @@ if __name__ == '__main__':
         # Commit pyproject.toml.
         tx.execute(
             f'git commit -m "v{version} release" pyproject.toml',
-            rollback='git checkout HEAD^ -- pyproject.toml',
+            rollback='git reset HEAD^',
         )
 
         # Tag the commit.
