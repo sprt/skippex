@@ -158,7 +158,7 @@ if __name__ == '__main__':
 
         # Tag the commit.
         tx.execute(
-            f'git tag -a {git_tag}',
+            f'git tag -a {git_tag} -m "v{version} release"',
             rollback=f'git tag -d {git_tag}',
         )
 
