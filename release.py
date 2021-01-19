@@ -1,5 +1,6 @@
 import argparse
 from getpass import getpass
+from io import TextIOBase
 import logging
 import logging.config
 import re
@@ -114,18 +115,43 @@ class Transaction:
         return True
 
 
-if __name__ == '__main__':
+def _setup_logging():
+    fh = logging.FileHandler('.release.log')
+    fh.setFormatter(logging.Formatter('%(asctime)s [%(levelname)-8s] %(message)s'))
+
+    sh = logging.StreamHandler(sys.stderr)
+    sh.setFormatter(logging.Formatter('[%(levelname)-8s] %(message)s'))
+
     logging.basicConfig(
         level=logging.DEBUG,
-        format='[%(levelname)-8s] %(message)s',
+        handlers=[sh, fh],
     )
+
+    class LogWriter(TextIOBase):
+        def __init__(self, logger: logging.Logger):
+            self._logger = logger
+
+        def write(self, message: str):
+            stripped = message.rstrip('\n')
+            if stripped:  # For getpass().
+                self._logger.info(stripped)
+
+        def flush(self):
+            pass
+
+    sys.stderr = LogWriter(logger)
+    sys.stdout = LogWriter(logger)
+
+
+if __name__ == '__main__':
+    _setup_logging()
 
     parser = argparse.ArgumentParser()
     parser.add_argument('version', help='version passed to poetry version')
     args = parser.parse_args()
 
     pypi_username = input('PyPI username: ')
-    pypi_password = getpass('PyPI password: ')
+    pypi_password = getpass('PyPI password: ', stream=sys.stderr)
 
     tx = Transaction()
 
@@ -184,6 +210,7 @@ if __name__ == '__main__':
             f' -c ". /venv/bin/activate && python -m pytest"',
             pure=True,
         )
+        # TODO: Smoke test the auth subcommand.
 
         # Tag the image with "latest".
         # TODO: Reassign the latest tag to its original image in rollback?
