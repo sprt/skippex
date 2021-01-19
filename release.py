@@ -12,6 +12,13 @@ from typing import List, NamedTuple, Optional, Type, cast
 import subprocess_tee
 
 
+# Disable third-party loggers.
+# Make sure this is done before defining any local logger.
+logging.config.dictConfig({
+    'version': 1,
+    'disable_existing_loggers': True,
+})
+
 logger = logging.getLogger(__name__)
 
 # Reference: https://semver.org/
@@ -106,12 +113,6 @@ class Transaction:
 
 
 if __name__ == '__main__':
-    # Disable third-party loggers.
-    logging.config.dictConfig({
-        'version': 1,
-        'disable_existing_loggers': True,
-    })
-
     logging.basicConfig(
         level=logging.DEBUG,
         format='[%(levelname)-8s] %(message)s',
