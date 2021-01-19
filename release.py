@@ -162,7 +162,9 @@ if __name__ == '__main__':
         tx.execute('[ "$(git rev-parse --symbolic-full-name --abbrev-ref HEAD)" = "main" ]', pure=True)
         # Ensure the repo is clean.
         tx.execute('[ -z "$(git status --porcelain)" ]', pure=True)
-        # TODO: Ensure permission to push to Docker repo.
+        # Ensure we're logged into the ghcr.io Docker repo.
+        # TODO: Check if we have permission to push our image. Not sure how to do this.
+        tx.execute('docker login ghcr.io', pure=True)
         # Ensure the tests pass.
         tx.execute('PY_COLORS=1 tox -- --color=yes', pure=True)
 
