@@ -191,6 +191,7 @@ if __name__ == '__main__':
         # Publish on GitHub Container Registry.
         tx.execute(f'docker push {docker_tag_version}')
         tx.execute(f'docker push {docker_tag_latest}')
+        # TODO: Delete older local tags?
 
         # Push to git repo.
         tx.execute('git push --follow-tags')
