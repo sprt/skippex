@@ -10,7 +10,7 @@ $ tox
 ## Releasing
 
 ```console
-$ python release.py
+$ python release.py <version>
 ```
 
 ## Building a development Docker image

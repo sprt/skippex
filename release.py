@@ -1,6 +1,9 @@
+import argparse
+from getpass import getpass
 import logging
 import logging.config
 import re
+import shlex
 import subprocess
 import sys
 from types import TracebackType
@@ -114,11 +117,12 @@ if __name__ == '__main__':
         format='[%(levelname)-8s] %(message)s',
     )
 
-    try:
-        version_bump = sys.argv[1]
-    except IndexError:
-        print('usage: python release.py <version bump>')
-        sys.exit(2)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('version', help='version passed to poetry version')
+    args = parser.parse_args()
+
+    pypi_username = input('PyPI username: ')
+    pypi_password = getpass('PyPI password: ')
 
     tx = Transaction()
 
@@ -136,7 +140,7 @@ if __name__ == '__main__':
 
         # Bump the version in pyproject.toml.
         p_poetry_version = tx.execute(
-            f'poetry version {version_bump!r}',
+            f'poetry version {args.version!r}',
             rollback='git checkout HEAD -- pyproject.toml',
         )
 
@@ -166,7 +170,8 @@ if __name__ == '__main__':
 
         # Test the image.
         tx.execute(
-            f'docker run --rm --network host --entrypoint sh {docker_tag_version} -c ". /venv/bin/activate && python -m pytest"',
+            f'docker run --rm --network host --entrypoint sh {docker_tag_version}'
+            f' -c ". /venv/bin/activate && python -m pytest"',
             pure=True,
         )
 
@@ -178,8 +183,10 @@ if __name__ == '__main__':
         )
 
         # Publish on PyPI.
-        # TODO: Deal with the username/password prompts.
-        tx.execute('poetry publish --build')
+        tx.execute(
+            f'yes | poetry publish --build --username {pypi_username!r}'
+            f' --password {shlex.quote(pypi_password)}'
+        )
 
         # Publish on GitHub Container Registry.
         tx.execute(f'docker push {docker_tag_version}')
