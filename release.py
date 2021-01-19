@@ -12,6 +12,8 @@ from typing import List, NamedTuple, Optional, Type, cast
 
 import subprocess_tee
 
+from skippex.cmd import EXIT_UNAUTHORIZED
+
 
 # Disable third-party loggers.
 # Make sure this is done before defining any local logger.
@@ -41,19 +43,26 @@ class Transaction:
         self._executed: List[Command] = []
         self.committed: Optional[bool] = None
 
-    def _execute(self, cmd: str) -> subprocess.CompletedProcess:
+    def _execute(self, cmd: str, check: bool = True) -> subprocess.CompletedProcess:
         logger.info(f'--> {cmd}')
         p = subprocess_tee.run(cmd, shell=True)
-        # check=True isn't supported by subprocess_tee.run():
-        # https://github.com/pycontribs/subprocess-tee/issues/26
-        p.check_returncode()
+        if check:
+            # check=True isn't supported by subprocess_tee.run():
+            # https://github.com/pycontribs/subprocess-tee/issues/26
+            p.check_returncode()
         return p
 
-    def execute(self, commit: str, rollback: Optional[str] = None, pure: bool = False) -> subprocess.CompletedProcess:
+    def execute(
+        self,
+        commit: str,
+        rollback: Optional[str] = None,
+        pure: bool = False,
+        check: bool = True,
+    ) -> subprocess.CompletedProcess:
         if pure and rollback:
             raise ValueError('cannot both be pure and have a rollback')
 
-        p = self._execute(commit)
+        p = self._execute(commit, check=check)
         command = Command(commit=commit, rollback=rollback, pure=pure)
         self._executed.append(command)
 
@@ -207,13 +216,24 @@ if __name__ == '__main__':
             rollback=f'docker rmi {docker_tag_version}',
         )
 
-        # Test the image.
+        # Ensure the tests pass inside the container.
         tx.execute(
             f'docker run --rm --network host --entrypoint sh {docker_tag_version}'
             f' -c ". /venv/bin/activate && python -m pytest"',
             pure=True,
         )
-        # TODO: Smoke test the auth/debug-info subcommands.
+
+        # Smoke test: ensure 'run' exits with status EXIT_UNAUTHORIZED.
+        smoke_test = tx.execute(
+            f'docker run --rm --network host {docker_tag_version} run',
+            pure=True,
+            check=False,
+        )
+        if smoke_test.returncode != EXIT_UNAUTHORIZED:
+            raise Rollback(
+                f'run smoke test exited with status {smoke_test.returncode}'
+                f' instead of {EXIT_UNAUTHORIZED} = EXIT_UNAUTHORIZED'
+            )
 
         # Tag the image with "latest".
         # TODO: Reassign the latest tag to its original image in rollback?

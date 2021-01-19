@@ -44,6 +44,8 @@ _PID_DIR = xdg.xdg_runtime_dir() or Path(tempfile.gettempdir())
 _PID_PATH = _PID_DIR / _PID_NAME
 
 
+EXIT_UNAUTHORIZED = 4
+
 logger = logging.getLogger(__name__)
 
 
@@ -90,13 +92,13 @@ def cmd_run(args: argparse.Namespace, db: Database, app: PlexApplication) -> Opt
             "No credentials found. Please first run the 'auth' command to "
             "authorize the application."
         )
-        return 1
+        return EXIT_UNAUTHORIZED
 
     logger.info('Verifying token...')
     auth_client = PlexAuthClient(app)
     if not auth_client.is_token_valid(auth_token):
         logger.error("Token invalid. Please run the 'auth' command to reauthenticate yourself.")
-        return 1
+        return EXIT_UNAUTHORIZED
 
     logger.info('Connecting to Plex server...')
     account = MyPlexAccount(token=auth_token)
