@@ -162,6 +162,7 @@ if __name__ == '__main__':
         tx.execute('[ "$(git rev-parse --symbolic-full-name --abbrev-ref HEAD)" = "main" ]', pure=True)
         # Ensure the repo is clean.
         tx.execute('[ -z "$(git status --porcelain)" ]', pure=True)
+        # TODO: Ensure permission to push to Docker repo.
         # Ensure the tests pass.
         tx.execute('PY_COLORS=1 tox -- --color=yes', pure=True)
 
@@ -210,7 +211,7 @@ if __name__ == '__main__':
             f' -c ". /venv/bin/activate && python -m pytest"',
             pure=True,
         )
-        # TODO: Smoke test the auth subcommand.
+        # TODO: Smoke test the auth/debug-info subcommands.
 
         # Tag the image with "latest".
         # TODO: Reassign the latest tag to its original image in rollback?

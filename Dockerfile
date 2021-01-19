@@ -36,11 +36,11 @@ FROM base as final
 
 LABEL org.opencontainers.image.source=https://github.com/sprt/skippex
 
-VOLUME /config
+VOLUME /data
 
 # Path XDG_DATA_HOME doesn't exist.
 # Variable XDG_RUNTIME_DIR isn't set.
-ENV XDG_DATA_HOME=/config \
+ENV XDG_DATA_HOME=/data \
     XDG_RUNTIME_DIR=/run
 RUN mkdir -p "$XDG_DATA_HOME" "$XDG_RUNTIME_DIR"
 

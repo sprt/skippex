@@ -22,17 +22,17 @@ $ docker build -t ghcr.io/sprt/skippex:dev .
 And later running this dev image:
 
 ```console
-$ docker run --rm -v skippex-dev:/config --network host ghcr.io/sprt/skippex:dev run
+$ docker run --rm -v skippex-dev:/data --network host ghcr.io/sprt/skippex:dev run
 ```
 
 Running the tests inside it:
 
 ```console
-$ docker run --rm --network host --entrypoint sh ghcr.io/sprt/skippex:dev -c ". /venv/bin/activate && python -m pytest"
+$ docker run --rm -v skippex-dev:/data --network host --entrypoint sh ghcr.io/sprt/skippex:dev -c ". /venv/bin/activate && python -m pytest"
 ```
 
 Inspecting it with a shell:
 
 ```console
-$ docker run --rm --network host --entrypoint sh -it ghcr.io/sprt/skippex:dev
+$ docker run --rm -v skippex-dev:/data --network host --entrypoint sh -it ghcr.io/sprt/skippex:dev
 ```

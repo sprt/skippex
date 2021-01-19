@@ -45,7 +45,7 @@ your Plex account.
   </tr>
   <tr>
     <td>
-      <code>$ docker run -v skippex:/config --network host ghcr.io/sprt/skippex auth</code>
+      <code>$ docker run -v skippex:/data --network host ghcr.io/sprt/skippex auth</code>
     </td>
     <td>
       <code>$ skippex auth</code>
@@ -63,7 +63,7 @@ playback sessions and automatically skip intros for you on supported devices:
   </tr>
   <tr>
     <td>
-      <code>$ docker run -v skippex:/config --network host ghcr.io/sprt/skippex run</code>
+      <code>$ docker run -v skippex:/data --network host ghcr.io/sprt/skippex run</code>
     </td>
     <td>
       <code>$ skippex run</code>
