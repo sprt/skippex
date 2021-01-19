@@ -6,7 +6,13 @@ authors = ["sprt <hellosprt@gmail.com>"]
 license = "MPL-2.0"
 readme = "README.md"
 repository = "https://github.com/sprt/skippex"
-keywords = ["plex", "chromecast"]
+keywords = ["plex", "chromecast", "mediaserver"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Topic :: Multimedia :: Video",
+]
 
 [tool.poetry.scripts]
 skippex = 'skippex.cmd:main'
