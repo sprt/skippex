@@ -3,7 +3,7 @@ from getpass import getpass
 import logging
 import logging.config
 import re
-import shlex
+from shlex import quote
 import subprocess
 import sys
 from types import TracebackType
@@ -140,7 +140,7 @@ if __name__ == '__main__':
 
         # Bump the version in pyproject.toml.
         p_poetry_version = tx.execute(
-            f'poetry version {args.version!r}',
+            f'poetry version {quote(args.version)}',
             rollback='git checkout HEAD -- pyproject.toml',
         )
 
@@ -185,7 +185,7 @@ if __name__ == '__main__':
         # Publish on PyPI.
         tx.execute(
             f'yes | poetry publish --build --username {pypi_username!r}'
-            f' --password {shlex.quote(pypi_password)}'
+            f' --password {quote(pypi_password)}'
         )
 
         # Publish on GitHub Container Registry.
