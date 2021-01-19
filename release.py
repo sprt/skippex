@@ -75,6 +75,8 @@ class Transaction:
         if exc_type is subprocess.CalledProcessError:
             exc_value = cast(subprocess.CalledProcessError, exc_value)
             logger.warn(f'Command {exc_value.cmd!r} exited with status {exc_value.returncode}')
+        elif exc_type is Rollback:
+            logger.warn(f'Script triggered rollback: {exc_value}')
         else:
             logger.warn('Exception raised:', exc_info=True)
 
@@ -147,6 +149,13 @@ if __name__ == '__main__':
 
         version = p_poetry_version.stdout.split()[-1]
         assert re_semver.match(version), f'not a valid semver: {version}'
+
+        confirm_version = input('Confirm new version? (y/N) ')
+        if confirm_version.lower() in ('y', 'yes'):
+            logger.info('New version confirmed by user')
+        else:
+            raise Rollback('user failed to confirm new version')
+
         git_tag = f'v{version}'
         docker_tag_version = f'ghcr.io/sprt/skippex:{version}'
         docker_tag_latest = f'ghcr.io/sprt/skippex:latest'
