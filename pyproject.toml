@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "skippex"
-version = "0.2.2"
+version = "0.2.3"
 description = "Automatic 'skip intro' for Plex with Chromecast support"
 authors = ["sprt <hellosprt@gmail.com>"]
 license = "MPL-2.0"
